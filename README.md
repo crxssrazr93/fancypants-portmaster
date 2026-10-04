@@ -16,7 +16,7 @@ The port runs the game's own SWF files in [Ruffle](https://ruffle.rs), a Flash P
 
 1. Buy the game on Steam.
 2. Download [fancypants.zip](fancypants.zip) and unzip it into the `ports/` folder of your device.
-3. Copy everything from its install folder into `ports/fancypants/gamedata/` on your device (you should see `ClassicPack.swf` and the folders `World1` to `World4`).
+3. Copy everything from the game's Steam install folder into `ports/fancypants/gamedata/` on your device (you should see `ClassicPack.swf` and the folders `World1` to `World4`).
 4. Start **Fancy Pants Adventures** from the Ports menu. The first start checks and patches the files and converts the World 4 textures, which takes a few minutes. Later starts are quick.
 
 Controls, settings, notes and known limitations are in [port/fancypants/README.md](port/fancypants/README.md), the file that ships with the port.
