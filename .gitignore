@@ -13,7 +13,8 @@ port/fancypants/gamedata/*
 port/fancypants/saves/
 port/fancypants/log.txt
 port/fancypants/patchlog.txt
-# Packages
+# Packages (the release zip is kept)
 *.zip
+!fancypants.zip
 __pycache__/
 tests/out/
