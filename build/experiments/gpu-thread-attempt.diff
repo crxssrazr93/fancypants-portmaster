@@ -1,0 +1,837 @@
+diff --git a/core/src/player.rs b/core/src/player.rs
+index 6fd49924..65d17a4c 100644
+--- a/core/src/player.rs
++++ b/core/src/player.rs
+@@ -3375,12 +3375,17 @@ mod port_fps {
+             let span = now - s.start;
+             if span >= Duration::from_secs(2) {
+                 let secs = span.as_secs_f64();
++                let (submit_ms, submits, c3d_ms) = ruffle_render::port_stats::take();
++                let frames = s.frames.max(1) as f64;
+                 tracing::info!(
+-                    "port_fps: {:.1} frames/s ({:.1} ms logic), {:.1} renders/s ({:.1} ms render)",
++                    "port_fps: {:.1} frames/s ({:.1} ms logic), {:.1} renders/s ({:.1} ms render), per frame: {:.1} ms in {:.1} GPU submits, {:.1} ms Stage3D",
+                     s.frames as f64 / secs,
+-                    s.logic.as_secs_f64() * 1000.0 / s.frames.max(1) as f64,
++                    s.logic.as_secs_f64() * 1000.0 / frames,
+                     s.renders as f64 / secs,
+                     s.render.as_secs_f64() * 1000.0 / s.renders.max(1) as f64,
++                    submit_ms / frames,
++                    submits as f64 / frames,
++                    c3d_ms / frames,
+                 );
+                 *guard = None;
+             }
+diff --git a/desktop/Cargo.toml b/desktop/Cargo.toml
+index 37faf257..3082b1f8 100644
+--- a/desktop/Cargo.toml
++++ b/desktop/Cargo.toml
+@@ -25,7 +25,7 @@ ruffle_render = { path = "../render", features = ["clap"] }
+ ruffle_render_wgpu = { path = "../render/wgpu", features = ["clap"] }
+ ruffle_video_software = { path = "../video/software", optional = true }
+ ruffle_video_external = { path = "../video/external", features = ["openh264"], optional = true }
+-ruffle_frontend_utils = { path = "../frontend-utils", features = ["cpal", "fs", "navigator"] }
++ruffle_frontend_utils = { path = "../frontend-utils", default-features = false, features = ["cpal", "fs", "navigator", "rustls-tls"] }
+ tracing = { workspace = true }
+ tracing-subscriber = { workspace = true }
+ tracing-appender = "0.2.5"
+diff --git a/desktop/src/gui/controller.rs b/desktop/src/gui/controller.rs
+index 2383b2dd..5c1e4895 100644
+--- a/desktop/src/gui/controller.rs
++++ b/desktop/src/gui/controller.rs
+@@ -39,7 +39,10 @@ pub struct GuiController {
+     window: Arc<Window>,
+     last_update: Instant,
+     repaint_after: Duration,
+-    surface: wgpu::Surface<'static>,
++    surface: Arc<wgpu::Surface<'static>>,
++    /// PortMaster port: the next window texture, acquired by the GPU worker thread right after
++    /// it presented the previous frame (see `render`).
++    next_frame: Arc<(std::sync::Mutex<NextFrame>, std::sync::Condvar)>,
+     surface_format: wgpu::TextureFormat,
+     movie_view_renderer: Arc<MovieViewRenderer>,
+     // Note that `window.get_inner_size` can change at any point on x11, even between two lines of code.
+@@ -172,7 +175,8 @@ impl GuiController {
+             window,
+             last_update: Instant::now(),
+             repaint_after: Duration::ZERO,
+-            surface,
++            surface: Arc::new(surface),
++            next_frame: Default::default(),
+             surface_format,
+             movie_view_renderer,
+             size,
+@@ -207,20 +211,21 @@ impl GuiController {
+     }
+ 
+     pub fn reconfigure_surface(&self) {
+-        self.surface.configure(
+-            &self.descriptors.device,
+-            &wgpu::SurfaceConfiguration {
+-                usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+-                format: self.surface_format,
+-                color_space: wgpu::SurfaceColorSpace::Auto,
+-                width: self.size.width,
+-                height: self.size.height,
+-                present_mode: Default::default(),
+-                desired_maximum_frame_latency: 2,
+-                alpha_mode: Default::default(),
+-                view_formats: Default::default(),
+-            },
+-        );
++        drop(self.take_next_frame());
++        let config = wgpu::SurfaceConfiguration {
++            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
++            format: self.surface_format,
++            color_space: wgpu::SurfaceColorSpace::Auto,
++            width: self.size.width,
++            height: self.size.height,
++            present_mode: Default::default(),
++            desired_maximum_frame_latency: 2,
++            alpha_mode: Default::default(),
++            view_formats: Default::default(),
++        };
++        // PortMaster port: frames are presented on the GPU worker thread; let it finish first
++        self.descriptors.gpu_worker.drain();
++        self.surface.configure(&self.descriptors.device, &config);
+         self.movie_view_renderer.update_resolution(
+             &self.descriptors,
+             self.window.fullscreen().is_none() && !self.no_gui,
+@@ -311,8 +316,47 @@ impl GuiController {
+         PhysicalPosition::new(x, y)
+     }
+ 
++    /// Waits for the GPU worker to present the last frame and takes the texture it acquired after.
++    fn take_next_frame(&self) -> Option<wgpu::SurfaceTexture> {
++        let (lock, cvar) = &*self.next_frame;
++        let mut next = lock.lock().expect("next frame lock");
++        while next.presenting {
++            next = cvar.wait(next).expect("next frame lock");
++        }
++        next.texture.take()
++    }
++
+     pub fn render(&mut self, mut player: Option<MutexGuard<Player>>) {
+-        let surface_texture = match self.surface.get_current_texture() {
++        let mut next_frame = self.take_next_frame();
++        if next_frame.is_none() {
++            // Acquire on the GPU worker thread as well (see `reconfigure_surface`)
++            let surface = self.surface.clone();
++            let acquired = Arc::new(std::sync::Mutex::new(None));
++            let result = acquired.clone();
++            self.descriptors.gpu_worker.run(move || {
++                *result.lock().expect("acquire lock") = Some(surface.get_current_texture());
++            });
++            self.descriptors.gpu_worker.drain();
++            let state = acquired.lock().expect("acquire lock").take();
++            match state {
++                Some(wgpu::CurrentSurfaceTexture::Success(texture))
++                | Some(wgpu::CurrentSurfaceTexture::Suboptimal(texture)) => next_frame = Some(texture),
++                Some(state @ (wgpu::CurrentSurfaceTexture::Lost | wgpu::CurrentSurfaceTexture::Outdated)) => {
++                    tracing::warn!("Surface became unavailable: {:?}, reconfiguring", state);
++                    self.reconfigure_surface();
++                    return;
++                }
++                Some(state) => {
++                    tracing::warn!("Couldn't acquire a surface texture: {:?}, skipping a frame", state);
++                    return;
++                }
++                None => return,
++            }
++        }
++        let surface_texture = if let Some(texture) = next_frame {
++            texture
++        } else {
++            match self.surface.get_current_texture() {
+             wgpu::CurrentSurfaceTexture::Success(surface_texture) => surface_texture,
+             wgpu::CurrentSurfaceTexture::Suboptimal(surface_texture) => {
+                 // The acquired texture is still usable - no reason to waste
+@@ -356,6 +400,7 @@ impl GuiController {
+                 // Generic error, not much we can do.
+                 panic!("wgpu: Acquiring a texture failed with a validation error");
+             }
++            }
+         };
+ 
+         #[cfg(feature = "tracy_images")]
+@@ -415,6 +460,10 @@ impl GuiController {
+                     label: Some("egui encoder"),
+                 });
+ 
++        // Direct queue writes below would overtake work still queued on the GPU worker
++        if !full_output.textures_delta.set.is_empty() || !clipped_primitives.is_empty() {
++            self.descriptors.gpu_worker.drain();
++        }
+         for (id, image_deltas) in full_output.textures_delta.set.drain() {
+             for image_delta in &image_deltas {
+                 self.egui_renderer.update_texture(
+@@ -478,17 +527,38 @@ impl GuiController {
+         }
+ 
+         command_buffers.push(encoder.finish());
+-        self.descriptors.queue.submit(command_buffers);
++        self.window.pre_present_notify();
++
++        // PortMaster port: submit and present on the GPU worker thread, which then acquires the
++        // next texture, so the player thread can start the next frame meanwhile.
++        let queue = self.descriptors.queue.clone();
++        let surface = self.surface.clone();
++        let next_frame = self.next_frame.clone();
++        next_frame.0.lock().expect("next frame lock").presenting = true;
++        self.descriptors.gpu_worker.run(move || {
++            queue.submit(command_buffers);
++            queue.present(surface_texture);
++            let texture = match surface.get_current_texture() {
++                wgpu::CurrentSurfaceTexture::Success(texture)
++                | wgpu::CurrentSurfaceTexture::Suboptimal(texture) => Some(texture),
++                _ => None,
++            };
++            let (lock, cvar) = &*next_frame;
++            let mut next = lock.lock().expect("next frame lock");
++            next.texture = texture;
++            next.presenting = false;
++            cvar.notify_all();
++        });
+ 
+         // Free textures only after submitting the command buffer that may still
+         // reference them.  Destroying a texture before its usage is submitted
+         // causes a wgpu validation panic.
++        if !full_output.textures_delta.free.is_empty() {
++            self.descriptors.gpu_worker.drain();
++        }
+         for id in full_output.textures_delta.free.drain() {
+             self.egui_renderer.free_texture(&id);
+         }
+-
+-        self.window.pre_present_notify();
+-        self.descriptors.queue.present(surface_texture);
+         #[cfg(feature = "tracy")]
+         tracing_tracy::client::frame_mark();
+         #[cfg(feature = "tracy_images")]
+@@ -590,7 +660,16 @@ fn select_wgpu_backend(
+ fn try_wgpu_backend(backend: wgpu::Backends, window: Arc<Window>) -> Option<wgpu::Instance> {
+     let instance = create_wgpu_instance(
+         backend,
+-        wgpu::BackendOptions::default(),
++        wgpu::BackendOptions {
++            gl: wgpu::GlBackendOptions {
++                // PortMaster port: GL fence waits fail on the Mali blob drivers used with
++                // Westonpack (glClientWaitSync returns 0), and rendering is submitted from the
++                // GPU worker thread. GL synchronises implicitly, as the web build relies on too.
++                fence_behavior: wgpu::GlFenceBehavior::AutoFinish,
++                ..Default::default()
++            },
++            ..Default::default()
++        },
+         Some(Box::new(window)),
+     );
+     if futures::executor::block_on(instance.enumerate_adapters(backend)).is_empty() {
+@@ -785,3 +864,9 @@ fn mmap_system_font(path: &Path) -> anyhow::Result<memmap2::Mmap> {
+     let mmap = mmap.map_err(|e| anyhow!("Failed to mmap font file at {path:?}: {e}"))?;
+     Ok(mmap)
+ }
++
++#[derive(Default)]
++struct NextFrame {
++    presenting: bool,
++    texture: Option<wgpu::SurfaceTexture>,
++}
+diff --git a/desktop/src/gui/movie.rs b/desktop/src/gui/movie.rs
+index 80faf01e..ef4cae37 100644
+--- a/desktop/src/gui/movie.rs
++++ b/desktop/src/gui/movie.rs
+@@ -261,6 +261,20 @@ impl RenderTarget for MovieView {
+     ) -> wgpu::SubmissionIndex {
+         queue.submit(command_buffers)
+     }
++
++    fn submit_on_worker(
++        &self,
++        descriptors: &ruffle_render_wgpu::descriptors::Descriptors,
++        encoder: wgpu::CommandEncoder,
++        _frame: Self::Frame,
++        after_submit: Box<dyn FnOnce() + Send>,
++    ) -> Result<u64, (wgpu::CommandEncoder, Self::Frame, Box<dyn FnOnce() + Send>)> {
++        let queue = descriptors.queue.clone();
++        Ok(descriptors.gpu_worker.run(move || {
++            ruffle_render::port_stats::submit(|| queue.submit(Some(encoder.finish())));
++            after_submit();
++        }))
++    }
+ }
+ 
+ #[derive(Debug)]
+diff --git a/render/src/lib.rs b/render/src/lib.rs
+index c3d53d2d..8802e0a2 100644
+--- a/render/src/lib.rs
++++ b/render/src/lib.rs
+@@ -25,3 +25,51 @@ pub mod quality;
+ pub mod tessellator;
+ 
+ pub use pixel_bender;
++
++/// Frame time breakdown for the PortMaster port's RUFFLE_FPS_LOG output.
++pub mod port_stats {
++    use std::sync::atomic::{AtomicU64, Ordering};
++    use std::time::Instant;
++
++    /// Nanoseconds spent in queue submissions (where the GL backend makes its driver calls).
++    pub static SUBMIT_NS: AtomicU64 = AtomicU64::new(0);
++    pub static SUBMITS: AtomicU64 = AtomicU64::new(0);
++    /// Nanoseconds spent processing Stage3D commands, including their submissions.
++    pub static CONTEXT3D_NS: AtomicU64 = AtomicU64::new(0);
++
++    pub fn time<T>(counter: &AtomicU64, f: impl FnOnce() -> T) -> T {
++        let t0 = Instant::now();
++        let r = f();
++        counter.fetch_add(t0.elapsed().as_nanos() as u64, Ordering::Relaxed);
++        r
++    }
++
++    pub fn submit<T>(f: impl FnOnce() -> T) -> T {
++        SUBMITS.fetch_add(1, Ordering::Relaxed);
++        time(&SUBMIT_NS, f)
++    }
++
++    /// Adds the time until it is dropped to CONTEXT3D_NS.
++    pub struct Context3DTimer(Instant);
++
++    impl Context3DTimer {
++        pub fn new() -> Self {
++            Self(Instant::now())
++        }
++    }
++
++    impl Drop for Context3DTimer {
++        fn drop(&mut self) {
++            CONTEXT3D_NS.fetch_add(self.0.elapsed().as_nanos() as u64, Ordering::Relaxed);
++        }
++    }
++
++    /// Returns and resets (submit ms, submits, Stage3D ms).
++    pub fn take() -> (f64, u64, f64) {
++        (
++            SUBMIT_NS.swap(0, Ordering::Relaxed) as f64 / 1e6,
++            SUBMITS.swap(0, Ordering::Relaxed),
++            CONTEXT3D_NS.swap(0, Ordering::Relaxed) as f64 / 1e6,
++        )
++    }
++}
+diff --git a/render/wgpu/src/backend.rs b/render/wgpu/src/backend.rs
+index b450481d..7c3cf971 100644
+--- a/render/wgpu/src/backend.rs
++++ b/render/wgpu/src/backend.rs
+@@ -441,6 +441,7 @@ impl<T: RenderTarget + 'static> RenderBackend for WgpuRenderBackend<T> {
+             ),
+             1,
+         );
++        self.descriptors.gpu_worker.drain();
+         self.target.resize(&self.descriptors.device, width, height);
+ 
+         self.surface = Surface::new(
+@@ -762,8 +763,33 @@ impl<T: RenderTarget + 'static> RenderBackend for WgpuRenderBackend<T> {
+             depth_or_array_layers: 1,
+         };
+ 
+-        self.active_frame.submit_direct(&self.descriptors);
+-        self.descriptors.queue.write_texture(
++        // PortMaster port: GPU work may still be queued on the worker thread, which a direct
++        // queue write would overtake, so the upload goes into the frame's command stream.
++        let row_bytes = (region.width() * 4) as usize;
++        let padded_row = row_bytes.next_multiple_of(wgpu::COPY_BYTES_PER_ROW_ALIGNMENT as usize);
++        let stride = (texture.texture.width() * 4) as usize;
++        let mut upload = vec![0u8; padded_row * region.height() as usize];
++        for (row, dest) in upload.chunks_exact_mut(padded_row).enumerate() {
++            let start = (region.y_min as usize + row) * stride + region.x_min as usize * 4;
++            dest[..row_bytes].copy_from_slice(&bitmap.data()[start..start + row_bytes]);
++        }
++        use wgpu::util::DeviceExt;
++        let upload_buffer = self.descriptors.device.create_buffer_init(
++            &wgpu::util::BufferInitDescriptor {
++                label: Some("Bitmap update upload"),
++                contents: &upload,
++                usage: wgpu::BufferUsages::COPY_SRC,
++            },
++        );
++        self.active_frame.command_encoder.copy_buffer_to_texture(
++            wgpu::TexelCopyBufferInfo {
++                buffer: &upload_buffer,
++                layout: wgpu::TexelCopyBufferLayout {
++                    offset: 0,
++                    bytes_per_row: Some(padded_row as u32),
++                    rows_per_image: None,
++                },
++            },
+             wgpu::TexelCopyTextureInfo {
+                 texture: &texture.texture,
+                 mip_level: 0,
+@@ -774,13 +800,6 @@ impl<T: RenderTarget + 'static> RenderBackend for WgpuRenderBackend<T> {
+                 },
+                 aspect: wgpu::TextureAspect::All,
+             },
+-            &bitmap.data()[(region.y_min * texture.texture.width() * 4) as usize
+-                ..(region.y_max * texture.texture.width() * 4) as usize],
+-            wgpu::TexelCopyBufferLayout {
+-                offset: (region.x_min * 4) as wgpu::BufferAddress,
+-                bytes_per_row: Some(4 * texture.texture.width()),
+-                rows_per_image: None,
+-            },
+             extent,
+         );
+ 
+@@ -1072,11 +1091,11 @@ impl<T: RenderTarget + 'static> RenderBackend for WgpuRenderBackend<T> {
+             &FilterSource::for_entire_texture(&target_texture.texture),
+         )?;
+ 
+-        let index = Some(self.active_frame.submit_for_target(
++        let index = self.active_frame.submit_for_target(
+             &self.descriptors,
+             &texture_target,
+             frame_output,
+-        ));
++        );
+ 
+         let sync_handle = self.make_queue_sync_handle(
+             texture_target,
+@@ -1280,6 +1299,36 @@ pub struct ActiveFrame {
+     pub staging_belt: wgpu::util::StagingBelt,
+     pub command_encoder: wgpu::CommandEncoder,
+     draws_since_flush: u32,
++    /// Staging belts waiting to be reused. Each submission takes the current belt along to the
++    /// GPU worker, which recalls it once the commands using it are submitted.
++    belt_pool: BeltPool,
++}
++
++pub type BeltPool = Arc<std::sync::Mutex<Vec<wgpu::util::StagingBelt>>>;
++
++/// Swaps in a fresh staging belt and returns the used one, closed, for submission.
++pub fn take_staging_belt(
++    belt: &mut wgpu::util::StagingBelt,
++    pool: &BeltPool,
++    device: &wgpu::Device,
++    chunk_size: u64,
++) -> wgpu::util::StagingBelt {
++    let fresh = pool
++        .lock()
++        .expect("belt pool lock")
++        .pop()
++        .unwrap_or_else(|| wgpu::util::StagingBelt::new(device.clone(), chunk_size));
++    let mut used = std::mem::replace(belt, fresh);
++    used.finish();
++    used
++}
++
++/// Recalls a submitted staging belt and returns it to the pool.
++pub fn recycle_staging_belt(mut belt: wgpu::util::StagingBelt, pool: &BeltPool) {
++    belt.recall();
++    if std::env::var_os("PORT_NO_POOL").is_none() {
++        pool.lock().expect("belt pool lock").push(belt);
++    }
+ }
+ 
+ impl ActiveFrame {
+@@ -1292,45 +1341,84 @@ impl ActiveFrame {
+                 .create_command_encoder(&Default::default()),
+             staging_belt: wgpu::util::StagingBelt::new(descriptors.device.clone(), 65536),
+             draws_since_flush: 0,
++            belt_pool: Default::default(),
+         }
+     }
+ 
+-    pub fn submit_for_target<T: RenderTarget>(
++    /// Takes the recorded commands, and the staging belt they use, for submission.
++    fn take_encoder(
+         &mut self,
+         descriptors: &Descriptors,
+-        target: &T,
+-        frame: T::Frame,
+-    ) -> SubmissionIndex {
++    ) -> (wgpu::CommandEncoder, wgpu::util::StagingBelt) {
+         self.draws_since_flush = 0;
+-        self.staging_belt.finish();
+-        let draw_encoder = std::mem::replace(
+-            &mut self.command_encoder,
+-            descriptors
+-                .device
+-                .create_command_encoder(&Default::default()),
+-        );
+-        let index = target.submit(
++        let belt = take_staging_belt(
++            &mut self.staging_belt,
++            &self.belt_pool,
+             &descriptors.device,
+-            &descriptors.queue,
+-            Some(draw_encoder.finish()),
+-            frame,
++            65536,
+         );
+-        self.staging_belt.recall();
+-        index
+-    }
+-
+-    pub fn submit_direct(&mut self, descriptors: &Descriptors) -> SubmissionIndex {
+-        self.draws_since_flush = 0;
+-        self.staging_belt.finish();
+-        let draw_encoder = std::mem::replace(
++        let encoder = std::mem::replace(
+             &mut self.command_encoder,
+             descriptors
+                 .device
+                 .create_command_encoder(&Default::default()),
+         );
+-        let index = descriptors.queue.submit(Some(draw_encoder.finish()));
+-        self.staging_belt.recall();
+-        index
++        (encoder, belt)
++    }
++
++    /// Submits the recorded commands to the target. Targets that support it (the window) are
++    /// submitted and presented on the GPU worker thread, returning `None`.
++    pub fn submit_for_target<T: RenderTarget>(
++        &mut self,
++        descriptors: &Descriptors,
++        target: &T,
++        frame: T::Frame,
++    ) -> Option<SubmissionIndex> {
++        let (draw_encoder, belt) = self.take_encoder(descriptors);
++        let pool = self.belt_pool.clone();
++        let after_submit = Box::new(move || recycle_staging_belt(belt, &pool));
++        match target.submit_on_worker(descriptors, draw_encoder, frame, after_submit) {
++            Ok(_) => None,
++            Err((draw_encoder, frame, after_submit)) => {
++                descriptors.gpu_worker.drain();
++                let index = target.submit(
++                    &descriptors.device,
++                    &descriptors.queue,
++                    Some(draw_encoder.finish()),
++                    frame,
++                );
++                after_submit();
++                Some(index)
++            }
++        }
++    }
++
++    /// Submits the recorded commands on the GPU worker thread.
++    pub fn submit_direct(&mut self, descriptors: &Descriptors) {
++        let (draw_encoder, belt) = self.take_encoder(descriptors);
++        let queue = descriptors.queue.clone();
++        let pool = self.belt_pool.clone();
++        descriptors.gpu_worker.run(move || {
++            ruffle_render::port_stats::submit(|| queue.submit(Some(draw_encoder.finish())));
++            recycle_staging_belt(belt, &pool);
++        });
++    }
++
++    /// Submits the recorded commands right away, after all queued GPU work, for readbacks.
++    pub fn submit_direct_sync(&mut self, descriptors: &Descriptors) -> SubmissionIndex {
++        let (draw_encoder, belt) = self.take_encoder(descriptors);
++        let queue = descriptors.queue.clone();
++        let pool = self.belt_pool.clone();
++        let index = Arc::new(std::sync::Mutex::new(None));
++        let result = index.clone();
++        descriptors.gpu_worker.run(move || {
++            let submitted = ruffle_render::port_stats::submit(|| queue.submit(Some(draw_encoder.finish())));
++            recycle_staging_belt(belt, &pool);
++            *result.lock().expect("submission index lock") = Some(submitted);
++        });
++        descriptors.gpu_worker.wait_for_gpu(&descriptors.device);
++        let index = index.lock().expect("submission index lock").take();
++        index.expect("GPU worker must have submitted")
+     }
+ 
+     pub fn maybe_flush(&mut self, descriptors: &Descriptors) {
+diff --git a/render/wgpu/src/context3d/mod.rs b/render/wgpu/src/context3d/mod.rs
+index 60fff3c8..2d3e5131 100644
+--- a/render/wgpu/src/context3d/mod.rs
++++ b/render/wgpu/src/context3d/mod.rs
+@@ -47,6 +47,7 @@ pub struct WgpuContext3D {
+     profile: Context3DProfile,
+ 
+     buffer_staging_belt: StagingBelt,
++    belt_pool: crate::backend::BeltPool,
+ 
+     current_texture_view: Option<wgpu::TextureView>,
+     current_texture_size: Option<Extent3d>,
+@@ -134,6 +135,7 @@ impl WgpuContext3D {
+             profile,
+             descriptors,
+             buffer_staging_belt,
++            belt_pool: Default::default(),
+             back_buffer_raw_texture_handle,
+             front_buffer_raw_texture_handle,
+             current_pipeline,
+@@ -166,9 +168,19 @@ impl WgpuContext3D {
+     /// Submits everything recorded for this frame.
+     fn flush(&mut self) {
+         if let Some(encoder) = self.buffer_command_encoder.take() {
+-            self.buffer_staging_belt.finish();
+-            self.descriptors.queue.submit([encoder.finish()]);
+-            self.buffer_staging_belt.recall();
++            // The belt goes along to the GPU worker, which recalls it after submitting
++            let belt = crate::backend::take_staging_belt(
++                &mut self.buffer_staging_belt,
++                &self.belt_pool,
++                &self.descriptors.device,
++                1 << 16,
++            );
++            let queue = self.descriptors.queue.clone();
++            let pool = self.belt_pool.clone();
++            self.descriptors.gpu_worker.run(move || {
++                ruffle_render::port_stats::submit(|| queue.submit([encoder.finish()]));
++                crate::backend::recycle_staging_belt(belt, &pool);
++            });
+         }
+     }
+ 
+@@ -509,6 +521,7 @@ impl Context3D for WgpuContext3D {
+     }
+ 
+     fn process_command(&mut self, command: Context3DCommand<'_>) {
++        let _timer = ruffle_render::port_stats::Context3DTimer::new();
+         match command {
+             Context3DCommand::Clear {
+                 red,
+@@ -541,6 +554,10 @@ impl Context3D for WgpuContext3D {
+                 wants_best_resolution_on_browser_zoom: _,
+             } => {
+                 let format = wgpu::TextureFormat::Rgba8Unorm;
++                // TEMP experiment
++                eprintln!("PORTEXP configureBackBuffer {width}x{height} aa={anti_alias} ds={depth_and_stencil}");
++                let div: u32 = std::env::var("PORT_BB_DIV").ok().and_then(|v| v.parse().ok()).unwrap_or(1);
++                let (width, height) = (width / div, height / div);
+ 
+                 let mut sample_count = anti_alias;
+                 if sample_count == 0 {
+@@ -771,6 +788,12 @@ impl Context3D for WgpuContext3D {
+                 anti_alias,
+                 surface_selector,
+             } => {
++                {
++                    static ONCE: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
++                    if ONCE.fetch_add(1, std::sync::atomic::Ordering::Relaxed) < 6 {
++                        eprintln!("PORTEXP setRenderToTexture aa={anti_alias} ds={enable_depth_and_stencil}");
++                    }
++                }
+                 let mut sample_count = anti_alias;
+                 if sample_count == 0 {
+                     sample_count = 1;
+@@ -1148,6 +1171,8 @@ impl Context3D for WgpuContext3D {
+                 self.current_pipeline.forget_bind_groups();
+                 self.bind_group = None;
+                 self.flush();
++                // Commands using it may still be queued on the GPU worker thread
++                self.descriptors.gpu_worker.drain();
+                 wrapper.texture.destroy();
+             }
+             Context3DCommand::SetColorMask {
+diff --git a/render/wgpu/src/descriptors.rs b/render/wgpu/src/descriptors.rs
+index e12f4bbd..11b71ebe 100644
+--- a/render/wgpu/src/descriptors.rs
++++ b/render/wgpu/src/descriptors.rs
+@@ -24,6 +24,7 @@ pub struct Descriptors {
+     pub shaders: Shaders,
+     pipelines: Mutex<FnvHashMap<(u32, wgpu::TextureFormat), Arc<Pipelines>>>,
+     pub filters: Filters,
++    pub gpu_worker: crate::gpu_worker::GpuWorker,
+ }
+ 
+ impl Debug for Descriptors {
+@@ -61,6 +62,7 @@ impl Descriptors {
+             shaders,
+             pipelines: Default::default(),
+             filters,
++            gpu_worker: Default::default(),
+         }
+     }
+ 
+diff --git a/render/wgpu/src/lib.rs b/render/wgpu/src/lib.rs
+index 1787a84b..3db23892 100644
+--- a/render/wgpu/src/lib.rs
++++ b/render/wgpu/src/lib.rs
+@@ -29,6 +29,7 @@ type Error = Box<dyn std::error::Error>;
+ #[macro_use]
+ pub mod utils;
+ 
++pub mod gpu_worker;
+ mod bitmaps;
+ mod context3d;
+ mod globals;
+@@ -192,6 +193,13 @@ impl QueueSyncHandle {
+         with_rgba: F,
+         frame: &mut ActiveFrame,
+     ) -> R {
++        // PortMaster port: the copy may still be queued on the GPU worker thread. Let the worker
++        // wait for the GPU too, as the Mali GL driver can't wait on its fences from this thread
++        // (once complete, waiting below returns without asking the driver).
++        match &self {
++            QueueSyncHandle::AlreadyCopied { descriptors, .. }
++            | QueueSyncHandle::NotCopied { descriptors, .. } => descriptors.gpu_worker.wait_for_gpu(&descriptors.device),
++        }
+         match self {
+             QueueSyncHandle::AlreadyCopied {
+                 index,
+@@ -245,7 +253,7 @@ impl QueueSyncHandle {
+                         depth_or_array_layers: 1,
+                     },
+                 );
+-                let index = frame.submit_direct(&descriptors);
++                let index = frame.submit_direct_sync(&descriptors);
+ 
+                 let image = capture_image(
+                     &descriptors.device,
+diff --git a/render/wgpu/src/target.rs b/render/wgpu/src/target.rs
+index cabd54f3..6c1a7eaf 100644
+--- a/render/wgpu/src/target.rs
++++ b/render/wgpu/src/target.rs
+@@ -35,12 +35,33 @@ pub trait RenderTarget: Debug + 'static {
+         command_buffers: I,
+         frame: Self::Frame,
+     ) -> wgpu::SubmissionIndex;
++
++    /// PortMaster port: finishes, submits and presents on the GPU worker thread, returning the
++    /// job id, or hands everything back if this target must be submitted synchronously.
++    #[expect(clippy::type_complexity)]
++    fn submit_on_worker(
++        &self,
++        _descriptors: &crate::descriptors::Descriptors,
++        encoder: wgpu::CommandEncoder,
++        frame: Self::Frame,
++        after_submit: Box<dyn FnOnce() + Send>,
++    ) -> Result<u64, (wgpu::CommandEncoder, Self::Frame, Box<dyn FnOnce() + Send>)> {
++        Err((encoder, frame, after_submit))
++    }
++}
++
++/// The next window frame, acquired by the GPU worker right after presenting the previous one.
++#[derive(Debug, Default)]
++struct NextFrame {
++    presenting: bool,
++    texture: Option<wgpu::SurfaceTexture>,
+ }
+ 
+ #[derive(Debug)]
+ pub struct SwapChainTarget {
+-    window_surface: wgpu::Surface<'static>,
++    window_surface: std::sync::Arc<wgpu::Surface<'static>>,
+     surface_config: wgpu::SurfaceConfiguration,
++    next_frame: std::sync::Arc<(std::sync::Mutex<NextFrame>, std::sync::Condvar)>,
+ }
+ 
+ #[derive(Debug)]
+@@ -104,7 +125,8 @@ impl SwapChainTarget {
+         surface.configure(device, &surface_config);
+         Self {
+             surface_config,
+-            window_surface: surface,
++            window_surface: std::sync::Arc::new(surface),
++            next_frame: Default::default(),
+         }
+     }
+ }
+@@ -113,6 +135,9 @@ impl RenderTarget for SwapChainTarget {
+     type Frame = SwapChainTargetFrame;
+ 
+     fn resize(&mut self, device: &wgpu::Device, width: u32, height: u32) {
++        // Let the worker finish presenting and drop the frame it acquired for the old size
++        drop(self.take_next_frame());
++        // (the caller drains the GPU worker before resizing)
+         self.surface_config.width = width;
+         self.surface_config.height = height;
+         self.window_surface.configure(device, &self.surface_config);
+@@ -131,17 +156,9 @@ impl RenderTarget for SwapChainTarget {
+     }
+ 
+     fn get_next_texture(&mut self) -> Option<Self::Frame> {
+-        let texture = match self.window_surface.get_current_texture() {
+-            wgpu::CurrentSurfaceTexture::Success(surface_texture) => surface_texture,
+-            // The texture is still usable - no reason to waste an already
+-            // acquired frame. Ideally the surface should also be reconfigured
+-            // before the next acquire; we don't currently do that (matching
+-            // pre-wgpu-29 behavior, which never checked the suboptimal flag).
+-            wgpu::CurrentSurfaceTexture::Suboptimal(surface_texture) => surface_texture,
+-            state => {
+-                tracing::warn!("Couldn't acquire surface texture: {:?}", state);
+-                return None;
+-            }
++        let texture = match self.take_next_frame() {
++            Some(texture) => texture,
++            None => acquire_surface_texture(&self.window_surface)?,
+         };
+         let view_format = remove_srgb(self.surface_config.format);
+ 
+@@ -161,10 +178,61 @@ impl RenderTarget for SwapChainTarget {
+         command_buffers: I,
+         frame: Self::Frame,
+     ) -> wgpu::SubmissionIndex {
+-        let index = queue.submit(command_buffers);
++        let index = ruffle_render::port_stats::submit(|| queue.submit(command_buffers));
+         queue.present(frame.texture);
+         index
+     }
++
++    fn submit_on_worker(
++        &self,
++        descriptors: &crate::descriptors::Descriptors,
++        encoder: wgpu::CommandEncoder,
++        frame: Self::Frame,
++        after_submit: Box<dyn FnOnce() + Send>,
++    ) -> Result<u64, (wgpu::CommandEncoder, Self::Frame, Box<dyn FnOnce() + Send>)> {
++        let queue = descriptors.queue.clone();
++        let surface = self.window_surface.clone();
++        let next_frame = self.next_frame.clone();
++        next_frame.0.lock().expect("next frame lock").presenting = true;
++        Ok(descriptors.gpu_worker.run(move || {
++            ruffle_render::port_stats::submit(|| queue.submit(Some(encoder.finish())));
++            after_submit();
++            queue.present(frame.texture);
++            let texture = acquire_surface_texture(&surface);
++            let (lock, cvar) = &*next_frame;
++            let mut next = lock.lock().expect("next frame lock");
++            next.texture = texture;
++            next.presenting = false;
++            cvar.notify_all();
++        }))
++    }
++}
++
++impl SwapChainTarget {
++    /// Waits for the GPU worker to present the last frame and takes the frame it acquired after.
++    fn take_next_frame(&self) -> Option<wgpu::SurfaceTexture> {
++        let (lock, cvar) = &*self.next_frame;
++        let mut next = lock.lock().expect("next frame lock");
++        while next.presenting {
++            next = cvar.wait(next).expect("next frame lock");
++        }
++        next.texture.take()
++    }
++}
++
++fn acquire_surface_texture(surface: &wgpu::Surface<'static>) -> Option<wgpu::SurfaceTexture> {
++    match surface.get_current_texture() {
++        wgpu::CurrentSurfaceTexture::Success(surface_texture) => Some(surface_texture),
++        // The texture is still usable - no reason to waste an already
++        // acquired frame. Ideally the surface should also be reconfigured
++        // before the next acquire; we don't currently do that (matching
++        // pre-wgpu-29 behavior, which never checked the suboptimal flag).
++        wgpu::CurrentSurfaceTexture::Suboptimal(surface_texture) => Some(surface_texture),
++        state => {
++            tracing::warn!("Couldn't acquire surface texture: {:?}", state);
++            None
++        }
++    }
+ }
+ 
+ #[derive(Debug)]
+@@ -336,9 +404,9 @@ impl RenderTarget for TextureTarget {
+                     depth_or_array_layers: 1,
+                 },
+             );
+-            queue.submit(command_buffers.into_iter().chain(Some(encoder.finish())))
++            ruffle_render::port_stats::submit(|| queue.submit(command_buffers.into_iter().chain(Some(encoder.finish()))))
+         } else {
+-            queue.submit(command_buffers)
++            ruffle_render::port_stats::submit(|| queue.submit(command_buffers))
+         }
+     }
+ }

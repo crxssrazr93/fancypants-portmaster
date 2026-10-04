@@ -1,0 +1,42 @@
+# Performance notes (RG35XX H, H700, Mali G31, Knulli)
+
+Measured with `FPA_FPS_LOG="1"` (frame rate and timings in `log.txt`) and, for AS3, `RUFFLE_AS3_PROF=1` with `RUST_LOG=ruffle_core::avm2::function::as3prof=info`.
+
+## Where the time goes
+
+Worlds 1 to 3 (AS2, software shapes): about 10 to 22 ms per frame, so a steady 30 fps.
+
+World 4 (the hub, Starling on Stage3D) is CPU bound on a single A53 core, about 60 ms per frame:
+
+| Part | Time per frame |
+|--|--|
+| ActionScript (game logic and Starling) | about 25 ms |
+| wgpu encoding about 36 Stage3D draws (one render pass each) at `finish()` | about 13 ms |
+| Mali GL driver executing them (replayed at `queue.submit`) | about 13 ms |
+| `hitTestPoint` (about 870 calls) | 3 to 6 ms |
+
+Shrinking the Stage3D back buffer to a quarter of its pixels did not change the frame rate at all, so the GPU fill rate is not a factor.
+
+## What helped
+
+* Batching Stage3D draws into one command encoder per frame, a pipeline cache and a bind group cache (2.9 to 15 fps).
+* Starling's per frame texture uploads: `BitmapData.draw` instead of `copyPixels`, plus copying GPU side bitmaps straight into Stage3D textures. The renderer must submit its pending offscreen draws first (`flush_pending_gpu_work`), or the copy reads an empty texture (invisible character).
+* Worlds 1 and 2 locked to 30 fps. Their game clock is 30 Hz; between 30 and 60 fps World 1's speed jumped between about 0.65x and 1.3x, and World 2 ran in slow motion.
+* World 2 caching levels at `bitRes = 1` instead of 1.5 (it ran out of memory in Level 1).
+* Knulli's "High performance" power mode (performance governor): 15.3 to 16.6 fps in the hub. Allowing 1.704 GHz instead of the 1.512 GHz cap gave 18.2 fps, but the port does not change clocks.
+
+## What did not help (do not retry without a new idea)
+
+* LTO for the Ruffle build: no measurable gain, much longer builds.
+* Capping `BitmapData.drawWithQuality` at the stage quality (no MSAA offscreen): slower (13.7 instead of 15.5 fps). Mali handles MSAA cheaply.
+* Lower Stage3D resolution: no gain (see above).
+* Moving GPU submission to a second thread (`build/experiments/gpu-thread-attempt.diff` and `gpu_worker.rs`). It worked on desktop Mesa (main thread time halved) but not on the Mali blob driver under Westonpack/crusty:
+  * `glClientWaitSync` returns 0 instead of a status, so any real fence wait fails (wgpu reports `GpuWaitTimeout` on `Surface::configure`). `GlFenceBehavior::AutoFinish` avoids the waits.
+  * Creating the window surface renderbuffer on the second thread fails.
+  * With submission and presentation on the second thread, buffers created on the main thread at the same time come out invalid (seen in shape vertex buffers), even though wgpu-hal serialises GL access with its context mutex.
+  * The single threaded `queue.submit`, `present` and `configure` path is the only reliable one on this stack.
+
+## Ideas not tried yet
+
+* Merging consecutive Stage3D draws into one render pass (needs uploads moved out of the pass; expected saving a few ms).
+* Coalescing `SetProgramConstants` uploads per draw.

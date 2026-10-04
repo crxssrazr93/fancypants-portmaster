@@ -1,0 +1,19 @@
+# Local workspace: JPEXS, Ruffle source and build output, test copies of the game
+work
+# Built by build/build_ruffle.sh and build/build_prep.sh
+port/fancypants/ruffle
+port/fancypants/tools/fpa-prep
+tools/fpa-prep/target/
+# Game files and files the port creates at runtime are never part of the repo
+*.swf
+*.atf
+*.as
+port/fancypants/gamedata/*
+!port/fancypants/gamedata/Copy the Classic Pack files here.txt
+port/fancypants/saves/
+port/fancypants/log.txt
+port/fancypants/patchlog.txt
+# Packages
+*.zip
+__pycache__/
+tests/out/
