@@ -11,7 +11,7 @@
     "porter": [
       "crxssrazr93"
     ],
-    "desc": "The Fancy Pants Adventures World 1, World 2 and World 3 and the World 4 hub from the Classic Pack, running in the Ruffle Flash emulator.",
+    "desc": "The Fancy Pants Adventures: Classic Pack collects Brad Borne's original Flash games, the series that set the bar for Flash platformers. Run, jump, slide and roll as the stick figure in the fancy pants through World 1, World 2 and World 3, picking your world from the hand drawn World 4 hub. Run fast, run fancy! Runs in the Ruffle Flash emulator; you need the game from Steam.",
     "desc_md": null,
     "inst": "Buy the game on Steam and copy everything from its install folder into ports/fancypants/gamedata/. The first launch patches the game files and converts the World 4 textures, which takes a few minutes.",
     "inst_md": "Buy the game on [Steam](https://store.steampowered.com/app/1668460/) and copy everything from its install folder into `ports/fancypants/gamedata/`. The first launch patches the game files and converts the World 4 textures, which takes a few minutes.",
