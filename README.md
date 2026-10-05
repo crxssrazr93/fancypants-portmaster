@@ -9,7 +9,7 @@ The port runs the game's own SWF files in [Ruffle](https://ruffle.rs), a Flash P
 | Status | Playable from start to finish on an RG35XX H (Knulli). Other devices and CFWs not yet tried. |
 | Target | aarch64 PortMaster devices (Knulli, muOS, ROCKNIX and others) with 1 GB RAM or more |
 | Runtimes | Westonpack (`weston_pkg_0.2`), bundled Ruffle build |
-| Tested game version | current Steam release (MD5 sums in [port/fancypants/README.md](port/fancypants/README.md)) |
+| Tested game version | current Steam release (MD5 sums in [ports/fancypants/README.md](ports/fancypants/README.md)) |
 | Speed on an RG35XX H | Worlds 1 to 3: a steady 30 fps (their native rate). World 4 hub: about 15 fps (17 with Knulli's High performance mode), at the right game speed |
 
 ## For players
@@ -19,7 +19,7 @@ The port runs the game's own SWF files in [Ruffle](https://ruffle.rs), a Flash P
 3. Copy everything from the game's Steam install folder into `ports/fancypants/gamedata/` on your device (you should see `ClassicPack.swf` and the folders `World1` to `World4`).
 4. Start **Fancy Pants Adventures** from the Ports menu. The first start checks and patches the files and converts the World 4 textures, which takes a few minutes. Later starts are quick.
 
-Controls, settings, notes and known limitations are in [port/fancypants/README.md](port/fancypants/README.md), the file that ships with the port.
+Controls, settings, notes and known limitations are in [ports/fancypants/README.md](ports/fancypants/README.md), the file that ships with the port.
 
 ## How it works
 
@@ -29,7 +29,7 @@ Fancy Pants Adventures.sh (PortMaster launcher)
   │   ├ checks MD5 sums, inflates each SWF and applies tools/patch/*.xdelta (originals kept as *.orig)
   │   └ tools/fpa-prep converts World 4's ATF textures to half resolution PNGs
   └ westonwrap.sh ... crusty_x11egl                            (Weston + Xwayland, GLES)
-      └ tools/run-ruffle.sh ruffle ... ClassicPack-port.swf
+      └ tools/run-ruffle ruffle ... ClassicPack-port.swf
           └ restarts Ruffle straight into the next world whenever the game switches worlds
 ```
 
@@ -47,7 +47,7 @@ The patch scripts work on source that JPEXS decompiles from your own SWF files a
 
 | Path | Contents |
 |--|--|
-| `port/` | Exactly what ships to `ports/` on the device (plus the `ruffle` and `fpa-prep` binaries after building) |
+| `ports/fancypants/` | The port in PortMaster-New's layout: launcher, `port.json`, `README.md`, `screenshot.png`, `gameinfo.xml`, and the `fancypants/` folder that ships to the device (plus the `ruffle` and `fpa-prep` binaries after building) |
 | `patch/` | Game patch scripts: decompile with JPEXS, patch the scripts, put them back |
 | `build/` | Ruffle fetch and cross build, the Ruffle patches, `fpa-prep` cross build, `make_patches.sh`, `package.sh`, and a failed threading experiment kept for reference |
 | `tools/fpa-prep/` | Source of the texture converter |
@@ -61,13 +61,13 @@ Requirements: Docker, Java (for [JPEXS ffdec](https://github.com/jindrapetrik/jp
 ```
 build/fetch_ruffle.sh work/ruffle-src                     # Ruffle 0.7.0 nightly 2026.10.4 with the port's patches
 build/build_ruffle.sh work/ruffle-src work/ruffle-arm      # aarch64 Ruffle (Ubuntu 20.04 image, glibc 2.30 symbols)
-cp work/ruffle-arm/ruffle port/fancypants/
-build/build_prep.sh port/fancypants/tools                  # aarch64 fpa-prep
+cp work/ruffle-arm/ruffle ports/fancypants/fancypants/
+build/build_prep.sh ports/fancypants/fancypants/tools       # aarch64 fpa-prep
 FFDEC=/path/to/ffdec.jar build/make_patches.sh /path/to/Classic\ Pack   # the xdelta3 patches
-build/package.sh                                           # fancypants.zip, ready to unzip into ports/
+build/package.sh                                           # fancypants.zip, laid out like PortMaster's release build
 ```
 
-`make_patches.sh` rebuilds the shipped patches byte for byte from the Steam files. When a patch changes, raise the number in `port/fancypants/tools/patch/version` so prepared installs patch again on their next start.
+`make_patches.sh` rebuilds the shipped patches byte for byte from the Steam files. When a patch changes, raise the number in `ports/fancypants/fancypants/tools/patch/version` so prepared installs patch again on their next start.
 
 ## Testing
 

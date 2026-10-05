@@ -20,9 +20,9 @@ The Steam release is an Adobe AIR app with SWF content, and there is no AIR runt
 
 ## 3. Memory: one world at a time
 
-The original shell keeps every world it has loaded resident and preloads the next ones. On 1 GB that runs out of memory after a world or two. The shell now prints `FPA_RELAUNCH <game> <level> <door>` and exits Ruffle when the player enters a door; `tools/run-ruffle.sh` starts Ruffle again straight into that world. A short black screen is the cost.
+The original shell keeps every world it has loaded resident and preloads the next ones. On 1 GB that runs out of memory after a world or two. The shell now prints `FPA_RELAUNCH <game> <level> <door>` and exits Ruffle when the player enters a door; `tools/run-ruffle` starts Ruffle again straight into that world. A short black screen is the cost.
 
-`run-ruffle.sh` only uses bash builtins to read Ruffle's output, because Westonpack preloads a library into every process that prints its own banner, so `sed` or `tail` in the pipe would add lines of their own.
+`run-ruffle` only uses bash builtins to read Ruffle's output, because Westonpack preloads a library into every process that prints its own banner, so `sed` or `tail` in the pipe would add lines of their own.
 
 World 2 also ran out of memory inside Level 1 on its own: it renders each level into cached bitmaps at 1.5x the 720x480 base resolution. Caching at 1x fixed it, and a 480p screen cannot show the difference.
 

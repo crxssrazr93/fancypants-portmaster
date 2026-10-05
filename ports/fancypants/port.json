@@ -1,0 +1,41 @@
+{
+  "version": 4,
+  "name": "fancypants.zip",
+  "items": [
+    "Fancy Pants Adventures.sh",
+    "fancypants"
+  ],
+  "items_opt": [],
+  "attr": {
+    "title": "Fancy Pants Adventures: Classic Pack",
+    "porter": [
+      "crxssrazr93"
+    ],
+    "desc": "The Fancy Pants Adventures World 1, World 2 and World 3 and the World 4 hub from the Classic Pack, running in the Ruffle Flash emulator.",
+    "desc_md": null,
+    "inst": "Buy the game on Steam and copy everything from its install folder into ports/fancypants/gamedata/. The first launch patches the game files and converts the World 4 textures, which takes a few minutes.",
+    "inst_md": "Buy the game on [Steam](https://store.steampowered.com/app/1668460/) and copy everything from its install folder into `ports/fancypants/gamedata/`. The first launch patches the game files and converts the World 4 textures, which takes a few minutes.",
+    "genres": [
+      "platformer"
+    ],
+    "image": null,
+    "rtr": false,
+    "exp": false,
+    "runtime": [
+      "weston_pkg_0.2.squashfs"
+    ],
+    "store": [
+      {
+        "name": "Steam",
+        "gameurl": "https://store.steampowered.com/app/1668460/",
+        "developerurl": "https://store.steampowered.com/search/?developer=Borne%20Games"
+      }
+    ],
+    "availability": "paid",
+    "reqs": [],
+    "arch": [
+      "aarch64"
+    ],
+    "min_glibc": "2.30"
+  }
+}

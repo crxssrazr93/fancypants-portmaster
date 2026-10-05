@@ -1,13 +1,13 @@
 #!/bin/bash
 # make_patches.sh <Classic Pack folder>
-# Builds the xdelta3 patches in port/fancypants/tools/patch/ from your own Steam files.
+# Builds the xdelta3 patches in ports/fancypants/fancypants/tools/patch/ from your own Steam files.
 # Needs Java (for JPEXS ffdec, path in $FFDEC), Python 3 and Docker.
-# Remember to raise port/fancypants/tools/patch/version when the patches change,
+# Remember to raise ports/fancypants/fancypants/tools/patch/version when the patches change,
 # so prepared installs patch again.
 set -e
 here=$(cd "$(dirname "$0")" && pwd); root="$here/.."
 game=$(realpath "$1")
-out="$root/port/fancypants/tools/patch"
+out="$root/ports/fancypants/fancypants/tools/patch"
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 mkdir -p "$tmp/built" "$tmp/fws/orig" "$tmp/fws/new"

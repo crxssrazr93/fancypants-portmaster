@@ -22,6 +22,6 @@ SOFTWARE.
 
 The above applies to the files written for this port. The game and Ruffle keep their
 own licenses. The patches in build/ruffle-patches/ modify Ruffle and are offered under
-Ruffle's license (MIT or Apache 2.0, at your option), see port/fancypants/licenses/.
+Ruffle's license (MIT or Apache 2.0, at your option), see ports/fancypants/fancypants/licenses/.
 No part of the game is included in this repository: the xdelta3 files in
-port/fancypants/tools/patch/ only apply to the player's own copy.
+ports/fancypants/fancypants/tools/patch/ only apply to the player's own copy.

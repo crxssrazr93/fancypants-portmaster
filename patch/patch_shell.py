@@ -292,7 +292,7 @@ sub("               if(this.rawStageHeight > Capabilities.screenResolutionY)\n  
 
 # The shell keeps every world it has loaded (hidden) for quick returns. A 1 GB handheld can't hold
 # the Stage3D hub and an AS2 world at once, so switching to another world restarts Ruffle instead
-# (fscommand "relaunch", handled by the port's run-ruffle.sh), and background preloading is off.
+# (fscommand "relaunch", handled by the port's run-ruffle), and background preloading is off.
 sub(
     """      private function LoadGame(game:String, level:String, door:int) : void
       {

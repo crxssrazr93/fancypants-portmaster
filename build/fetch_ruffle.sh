@@ -1,6 +1,6 @@
 #!/bin/bash
 # fetch_ruffle.sh [dir]: clone Ruffle at the commit the port is built from and apply the port's patches.
-# Then build with: build/build_ruffle.sh <dir> work/ruffle-arm && cp work/ruffle-arm/ruffle port/fancypants/
+# Then build with: build/build_ruffle.sh <dir> work/ruffle-arm && cp work/ruffle-arm/ruffle ports/fancypants/fancypants/
 set -e
 here=$(cd "$(dirname "$0")" && pwd)
 dir="${1:-$here/../work/ruffle-src}"

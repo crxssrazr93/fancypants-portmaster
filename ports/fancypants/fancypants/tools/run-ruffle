@@ -1,5 +1,5 @@
 #!/bin/bash
-# run-ruffle.sh <ruffle> <args...> <file.swf>
+# run-ruffle <ruffle> <args...> <file.swf>
 # Runs Ruffle. When the game switches to another world it prints "FPA_RELAUNCH <game> <level> <door>"
 # and exits; Ruffle is then started again straight into that world, so every world gets all of
 # the handheld's memory instead of piling up next to the previous one.

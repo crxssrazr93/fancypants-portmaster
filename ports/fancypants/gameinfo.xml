@@ -3,9 +3,10 @@
   <game>
     <path>./Fancy Pants Adventures.sh</path>
     <name>Fancy Pants Adventures: Classic Pack</name>
-    <desc>The original Fancy Pants Adventures (World 1, World 2 and World 3) running in the Ruffle Flash emulator, launched from the Classic Pack hub.</desc>
+    <desc>The original Fancy Pants Adventures: World 1, World 2 and World 3, launched from the World 4 hub, running in the Ruffle Flash emulator.</desc>
+    <releasedate>20240218T000000</releasedate>
     <developer>Borne Games</developer>
-    <publisher>Borne Games</publisher>
+    <publisher>2 Left Thumbs</publisher>
     <genre>Platformer</genre>
     <image>./fancypants/screenshot.png</image>
   </game>
