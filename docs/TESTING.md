@@ -14,7 +14,7 @@ Pitfalls found the hard way:
 
 * `/launch` with a path ES does not list does not fail: it starts whichever game is selected in the menu. Always check `/systems/ports/games` first (`tests/device.sh launch` does).
 * Paths with spaces: `scp` to such a path fails; copy with `ssh host "cat > '<path>'" < file` instead.
-* `pkill -f pattern` or `pgrep -f pattern` run through `ssh host "..."` also match the remote shell whose command line contains the pattern, which kills your own SSH session (exit 255). Use a bracketed pattern such as `pgrep -f "[k]eyd.py"`, or `pidof ruffle`.
+* `pkill -f pattern` or `pgrep -f pattern` run through `ssh host "..."` also match the remote shell whose command line contains the pattern, which kills your own SSH session (exit 255). A bracketed pattern such as `pgrep -f "[k]eyd.py"` only helps when the plain name appears nowhere else in that command line; a pid file or `pidof ruffle` is safer (`tests/device.sh keyd` uses a pid file).
 * The first launch, and the first launch after a patch version bump, shows PortMaster's patcher screen, which waits for a button press when it finishes. Send `enter` through keyd to continue.
 * Per game settings live in `/userdata/system/batocera.conf`, for example `ports["Fancy Pants Adventures.sh"].powermode=highperformance` (set it with `/usr/bin/knulli-settings-set`, or in the game's options in ES).
 

@@ -128,6 +128,11 @@ SetVariable
 W2_BITRES_OLD = 'Push "bitRes", 1.5\nDefineLocal\n'
 W2_BITRES_NEW = 'Push "bitRes", 1\nDefineLocal\n'
 
+# World 3 caches Level 4 (its "box cache" level) at 1.5x as well, which runs out of memory on
+# 1 GB handhelds while the level loads; cache it at 1x like the other levels.
+W3_BITRES_OLD = 'Push "bitRes", 1.5\nSetVariable\n'
+W3_BITRES_NEW = 'Push "bitRes", 1\nSetVariable\n'
+
 done = {"scrollrect": 0}
 for frame in sorted(os.listdir(os.path.join(exp, "scripts"))):
     p = os.path.join(exp, "scripts", frame, "DoAction.pcode")
@@ -151,6 +156,9 @@ for frame in sorted(os.listdir(os.path.join(exp, "scripts"))):
         done["tick"] = 1
     if '"World2_LevelProgress"' in src and src.count(W2_BITRES_OLD) == 1:
         src = src.replace(W2_BITRES_OLD, W2_BITRES_NEW)
+        done["bitres"] = 1
+    if '"startBuildCache"' in src and src.count(W3_BITRES_OLD) == 1:
+        src = src.replace(W3_BITRES_OLD, W3_BITRES_NEW)
         done["bitres"] = 1
     if src != orig:
         dst = os.path.join(out, frame + ".pcode")

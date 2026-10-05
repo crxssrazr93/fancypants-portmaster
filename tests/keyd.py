@@ -6,10 +6,12 @@ import os, time
 from evdev import UInput, ecodes as e
 
 keys = {k: getattr(e, "KEY_" + k.upper()) for k in
-        ["up", "down", "left", "right", "s", "a", "d", "space", "enter", "escape", "q"]}
+        ["up", "down", "left", "right", "s", "a", "d", "space", "enter", "esc", "q", "m"]}
 ui = UInput({e.EV_KEY: list(keys.values())}, name="fpa-test-keys")
 fifo = "/tmp/fpa/keys"
 os.makedirs("/tmp/fpa", exist_ok=True)
+with open("/tmp/fpa/keyd.pid", "w") as f:
+    f.write(str(os.getpid()))
 if not os.path.exists(fifo):
     os.mkfifo(fifo)
 while True:

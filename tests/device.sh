@@ -28,7 +28,8 @@ case $1 in
     S "curl -s -m 5 -X POST -d '$LAUNCHER' http://127.0.0.1:1234/launch";;
   stop) S 'kill $(pidof ruffle) 2>/dev/null; sleep 4; pidof ruffle || echo stopped';;
   keyd) S 'mkdir -p /tmp/fpa && cat > /tmp/fpa/keyd.py' < "$here/keyd.py"
-        S 'pgrep -f "[k]eyd.py" >/dev/null || (setsid nohup python3 /tmp/fpa/keyd.py >/tmp/fpa/keyd.log 2>&1 </dev/null &)';;
+        # a pid file, not pgrep: pgrep -f would also match this ssh command line
+        S 'kill -0 $(cat /tmp/fpa/keyd.pid 2>/dev/null) 2>/dev/null || { rm -f /tmp/fpa/keys; nohup python3 /tmp/fpa/keyd.py >/tmp/fpa/keyd.log 2>&1 </dev/null & sleep 2; }; cat /tmp/fpa/keyd.log; [ -p /tmp/fpa/keys ] && echo keyd running';;
   keys) shift; printf '%s\n' "$@" | S 'cat > /tmp/fpa/keys';;
   shot) S 'mkdir -p /tmp/fpa && cd /tmp/fpa && dd if=/dev/fb0 of=fb.raw bs=2560 count=960 2>/dev/null && ffmpeg -loglevel error -y -f rawvideo -pix_fmt bgra -s 640x960 -i fb.raw -vf crop=640:480:0:$(cut -d, -f2 /sys/class/graphics/fb0/pan) s.png && cat s.png' > "$OUT/$2.png" && echo "$OUT/$2.png";;
   stat) S "$LOG | grep -E 'port_fps|panic|ERROR [^r]' | tail -3; P=\$(pidof ruffle); [ -n \"\$P\" ] && grep VmRSS /proc/\$P/status; free -m | sed -n 2p";;

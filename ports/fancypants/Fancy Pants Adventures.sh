@@ -39,10 +39,11 @@ if [ "$(cat "$DATADIR/.port_prepared" 2>/dev/null)" != "$PATCH_VERSION" ]; then
   else
     pm_message "This port requires the latest version of PortMaster."
     sleep 5
+    pm_finish
     exit 1
   fi
   # the patcher screen has shown the error already
-  [ "$(cat "$DATADIR/.port_prepared" 2>/dev/null)" = "$PATCH_VERSION" ] || exit 1
+  [ "$(cat "$DATADIR/.port_prepared" 2>/dev/null)" = "$PATCH_VERSION" ] || { pm_finish; exit 1; }
 fi
 
 # Mount Weston runtime
@@ -75,7 +76,7 @@ pm_platform_helper "$GAMEDIR/ruffle"
 # westonwrap replaces XDG_RUNTIME_DIR; pass the real one on so ALSA can reach PipeWire
 REAL_XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 # FPA_FPS_LOG=1 in fancypants.cfg writes the frame rate to log.txt
-[ "$FPA_FPS_LOG" = "1" ] && FPS_ENV="RUFFLE_FPS_LOG=1" || FPS_ENV="RUFFLE_FPS_LOG_OFF=1"
+[ "$FPA_FPS_LOG" = "1" ] && FPS_ENV="RUFFLE_FPS_LOG=1"
 
 # CRUSTY_BLOCK_INPUT: gptokeyb provides the keyboard, so don't also forward the pad
 # WRAPPED_PRELOAD_PANFROST: on ROCKNIX/panfrost westonwrap runs the app natively; preload crusty for input blocking
