@@ -16,7 +16,7 @@ cp "$src/Fancy Pants Adventures.sh" "$stage/"
 cp -r "$src/fancypants" "$stage/"
 rm -rf "$stage/fancypants/saves" "$stage/fancypants/config" "$stage/fancypants/cache" "$stage"/fancypants/*.txt
 find "$stage/fancypants/gamedata" -mindepth 1 ! -name 'Copy the Classic Pack files here.txt' -exec rm -rf {} +
-cp "$src/port.json" "$src/gameinfo.xml" "$src/screenshot.png" "$stage/fancypants/"
+cp "$src/port.json" "$src/gameinfo.xml" "$src/screenshot.png" "$src/cover.png" "$stage/fancypants/"
 cp "$src/README.md" "$stage/fancypants/fancypants.md"
 rm -f "$root/fancypants.zip"
 (cd "$stage" && zip -9 -r -q -X "$root/fancypants.zip" .)

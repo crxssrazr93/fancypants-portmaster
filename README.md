@@ -47,7 +47,7 @@ The patch scripts work on source that JPEXS decompiles from your own SWF files a
 
 | Path | Contents |
 |--|--|
-| `ports/fancypants/` | The port in PortMaster-New's layout: launcher, `port.json`, `README.md`, `screenshot.png`, `gameinfo.xml`, and the `fancypants/` folder that ships to the device (plus the `ruffle` and `fpa-prep` binaries after building) |
+| `ports/fancypants/` | The port in PortMaster-New's layout: launcher, `port.json`, `README.md`, `screenshot.png`, `cover.png`, `gameinfo.xml`, and the `fancypants/` folder that ships to the device (plus the `ruffle` and `fpa-prep` binaries after building) |
 | `patch/` | Game patch scripts: decompile with JPEXS, patch the scripts, put them back |
 | `build/` | Ruffle fetch and cross build, the Ruffle patches, `fpa-prep` cross build, `make_patches.sh`, `package.sh`, and a failed threading experiment kept for reference |
 | `tools/fpa-prep/` | Source of the texture converter |
