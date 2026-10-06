@@ -15,6 +15,7 @@ SCALE="0.5"   # must match the scale baked into FPAWorld4.xdelta
 
 # Device, system and memory details first (tools/portlog.sh), then everything this script prints
 source "$GAMEDIR/tools/portlog.sh"
+mv -f "$GAMEDIR/patchlog.txt" "$GAMEDIR/patchlog.prev.txt" 2>/dev/null  # keep the previous setup's log
 port_header "Fancy Pants Adventures setup" > "$GAMEDIR/patchlog.txt"
 exec > >(tee -a "$GAMEDIR/patchlog.txt") 2>&1
 echo "=== Fancy Pants Adventures: preparing game files $(date) ==="

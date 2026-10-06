@@ -18,3 +18,4 @@ ports/fancypants/fancypants/patchlog.txt
 !fancypants.zip
 __pycache__/
 tests/out/
+ports/fancypants/fancypants/*.prev.txt
