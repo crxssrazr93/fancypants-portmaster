@@ -13,12 +13,18 @@ XDELTA="${controlfolder:+$controlfolder/}xdelta3"
 [ -x "$XDELTA" ] || XDELTA="xdelta3"
 SCALE="0.5"   # must match the scale baked into FPAWorld4.xdelta
 
-> "$GAMEDIR/patchlog.txt" && exec > >(tee "$GAMEDIR/patchlog.txt") 2>&1
+# Device, system and memory details first (tools/portlog.sh), then everything this script prints
+source "$GAMEDIR/tools/portlog.sh"
+port_header "Fancy Pants Adventures setup" > "$GAMEDIR/patchlog.txt"
+exec > >(tee -a "$GAMEDIR/patchlog.txt") 2>&1
 echo "=== Fancy Pants Adventures: preparing game files $(date) ==="
 
 # PortMaster's patcher screen shows our output; these two lines make it report a failure
 fail() {
   echo "ERROR: $*"
+  echo "To report a problem, send ${PORT_REPORT_FILES:-patchlog.txt}."
+  port_log "setup FAILED after ${SECONDS}s: $*"
+  port_mem end
   echo "PATCH_FAIL_MSG:Setup failed: $*"
   echo "Patching process failed!"
   exit 1
@@ -110,4 +116,6 @@ rm -rf "Adobe AIR" META-INF ./*.exe ./*.dll mimetype 2>/dev/null
 
 cp "$PATCHDIR/version" .port_prepared
 echo "=== Done. Enjoy! ==="
+port_log "setup finished in ${SECONDS}s"
+port_mem end
 exit 0

@@ -31,6 +31,11 @@ DATADIR="$GAMEDIR/gamedata"
 cd "$GAMEDIR"
 
 > "$GAMEDIR/log.txt" && exec > >(tee "$GAMEDIR/log.txt") 2>&1
+# Device, system and memory details for bug reports (tools/portlog.sh)
+# The files a bug report needs; named in log.txt and on screen only when something fails
+export PORT_REPORT_FILES="ports/fancypants/log.txt and patchlog.txt"
+source "$GAMEDIR/tools/portlog.sh"
+port_header "Fancy Pants Adventures launcher"
 
 $ESUDO chmod +x "$GAMEDIR/ruffle" "$GAMEDIR/tools/fpa-prep" "$GAMEDIR/tools/patchscript" "$GAMEDIR/tools/run-ruffle"
 
@@ -39,12 +44,16 @@ source "$GAMEDIR/fancypants.cfg"
 
 # Patch the Steam files for Ruffle on first run, and again when a port update ships new patches
 PATCH_VERSION="$(cat "$GAMEDIR/tools/patch/version")"
+port_files "$DATADIR/ClassicPack.swf" "$DATADIR/ClassicPack-port.swf"
+port_log "setup: patch version $PATCH_VERSION, prepared $(cat "$DATADIR/.port_prepared" 2>/dev/null || echo never)"
+port_log "settings (fancypants.cfg): quality $FPA_QUALITY, aspect $FPA_ASPECT, world fps $FPA_WORLD_FPS, GL $FPA_GL_LIBRARY, fps log $FPA_FPS_LOG"
 if [ "$(cat "$DATADIR/.port_prepared" 2>/dev/null)" != "$PATCH_VERSION" ]; then
   if [ -f "$controlfolder/utils/patcher.txt" ]; then
     export PATCHER_FILE="$GAMEDIR/tools/patchscript"
     export PATCHER_GAME="$(basename "${0%.*}")"
     export PATCHER_TIME="a few minutes"
     export controlfolder
+    port_log "running the setup (tools/patchscript), its log is patchlog.txt"
     source "$controlfolder/utils/patcher.txt"
   else
     pm_message "This port requires the latest version of PortMaster."
@@ -54,7 +63,9 @@ if [ "$(cat "$DATADIR/.port_prepared" 2>/dev/null)" != "$PATCH_VERSION" ]; then
   fi
   # the patcher screen has shown the error already; patchlog.txt keeps it
   if [ "$(cat "$DATADIR/.port_prepared" 2>/dev/null)" != "$PATCH_VERSION" ]; then
-    pm_message "Preparing the game failed, see ports/fancypants/patchlog.txt."
+    port_log "setup failed"
+    port_report
+    pm_message "Preparing the game failed, see ports/fancypants/patchlog.txt. To report it, send $PORT_REPORT_FILES."
     sleep 8
     pm_finish
     exit 1
@@ -77,6 +88,7 @@ if [[ "$PM_CAN_MOUNT" != "N" ]]; then
   $ESUDO umount "${weston_dir}"
 fi
 $ESUDO mount "$controlfolder/libs/${weston_runtime}.squashfs" "${weston_dir}"
+port_mounted "$weston_runtime" "$weston_dir/westonwrap.sh"
 
 mkdir -p "$GAMEDIR/saves" "$GAMEDIR/config" "$GAMEDIR/cache"
 
@@ -93,6 +105,7 @@ REAL_XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 # FPA_FPS_LOG=1 in fancypants.cfg writes the frame rate to log.txt
 [ "$FPA_FPS_LOG" = "1" ] && FPS_ENV="RUFFLE_FPS_LOG=1"
 
+port_log "starting the game, quality $FPA_QUALITY, aspect $FPA_ASPECT, world fps $FPA_WORLD_FPS, GL $FPA_GL_LIBRARY"
 # CRUSTY_BLOCK_INPUT: gptokeyb provides the keyboard, so don't also forward the pad
 # WRAPPED_PRELOAD_PANFROST: on ROCKNIX/panfrost westonwrap runs the app natively; preload crusty for input blocking
 # WGPU_DISCARD_HAL_LABELS: avoids a libmali crash in glPushDebugGroup (gfx-rs/wgpu#8937)
@@ -111,6 +124,7 @@ $ESUDO env CRUSTY_BLOCK_INPUT=1 \
     "$DATADIR/ClassicPack-port.swf"
 
 # Clean up after ourselves
+port_exit
 $ESUDO $weston_dir/westonwrap.sh cleanup
 if [[ "$PM_CAN_MOUNT" != "N" ]]; then
   $ESUDO umount "${weston_dir}"

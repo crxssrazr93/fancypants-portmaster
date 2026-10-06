@@ -23,6 +23,10 @@ Buttons are named as the game's prompts show them. On Knulli they act as labelle
 * Steam achievements and cloud saves are not available, progress is saved locally.
 * Settings (quality, screen fit, frame rate) are in `ports/fancypants/fancypants.cfg`.
 
+## Reporting problems
+
+Please send `ports/fancypants/log.txt` and `ports/fancypants/patchlog.txt`. `log.txt` is rewritten on every start, so copy it right after the problem happens. Lines starting with `PORT:` list the device, firmware, screen, memory and swap, the state of the setup, and at the end how long the game ran and whether the system ran out of memory.
+
 ## Thanks
 
 Brad Borne / Borne Games for the game, the [Ruffle](https://ruffle.rs) team, BinaryCounter for [Westonpack](https://github.com/binarycounter/Westonpack), and Adobe for dds2atf.
