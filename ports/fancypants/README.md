@@ -4,6 +4,8 @@ Buy the game on [Steam](https://store.steampowered.com/app/1668460/) and copy ev
 
 ## Controls
 
+Buttons are named as the game's prompts show them. On Knulli they act as labelled on the device. Other firmwares use SDL's layout by position, where A is the bottom button (labelled B on Anbernic devices).
+
 | Button | Action |
 |--|--|
 | D-pad / Left stick | Move, Up enters doors, Down ducks |
