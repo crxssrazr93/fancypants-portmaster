@@ -5,19 +5,30 @@
 # the handheld's memory instead of piling up next to the previous one.
 # Only bash builtins read Ruffle's output: Westonpack preloads a library into every process that
 # prints its own banner, so external filters (sed, tail) would add lines of their own.
+# Worlds 1 to 3 (AS2) run with RUFFLE_LAZY_MOUSE_PICK: Ruffle only looks for the clip under the
+# mouse when the mouse moves, instead of searching every clip of the level on every frame.
+# World 3 advances one fixed step per frame, so it also runs with RUFFLE_FRAMESKIP: when a frame
+# is slow, Ruffle runs two game frames per screen update and the game keeps its speed.
 ruffle=$1
 shift
 swf=${!#}
 set -- "${@:1:$#-1}"
 next=()
+game=""
+for a in "$@"; do [ "${a#-Pgame=}" != "$a" ] && game=${a#-Pgame=}; done
 while :; do
   target=""
+  skip=()
+  case $game in
+    World1|World2) skip=(env RUFFLE_LAZY_MOUSE_PICK=1) ;;
+    World3) skip=(env RUFFLE_LAZY_MOUSE_PICK=1 RUFFLE_FRAMESKIP=1) ;;
+  esac
   while IFS= read -r line; do
     printf '%s\n' "$line" >&2
     case $line in
       "FPA_RELAUNCH "*) target=${line#FPA_RELAUNCH } ;;
     esac
-  done < <("$ruffle" "$@" "${next[@]}" "$swf" 2>&1)
+  done < <("${skip[@]}" "$ruffle" "$@" "${next[@]}" "$swf" 2>&1)
   [ -n "$target" ] || break
   read -r game level door <<< "$target"
   echo "=== switching to $game $level (door $door) ===" >&2
