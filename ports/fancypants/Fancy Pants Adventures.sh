@@ -52,8 +52,13 @@ if [ "$(cat "$DATADIR/.port_prepared" 2>/dev/null)" != "$PATCH_VERSION" ]; then
     pm_finish
     exit 1
   fi
-  # the patcher screen has shown the error already
-  [ "$(cat "$DATADIR/.port_prepared" 2>/dev/null)" = "$PATCH_VERSION" ] || { pm_finish; exit 1; }
+  # the patcher screen has shown the error already; patchlog.txt keeps it
+  if [ "$(cat "$DATADIR/.port_prepared" 2>/dev/null)" != "$PATCH_VERSION" ]; then
+    pm_message "Preparing the game failed, see ports/fancypants/patchlog.txt."
+    sleep 8
+    pm_finish
+    exit 1
+  fi
 fi
 
 # Mount Weston runtime
