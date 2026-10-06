@@ -4,7 +4,7 @@ Buy the game on [Steam](https://store.steampowered.com/app/1668460/) and copy ev
 
 ## Controls
 
-Buttons are named as the game's prompts show them. On Knulli they act as labelled on the device. Other firmwares use SDL's layout by position, where A is the bottom button (labelled B on Anbernic devices).
+Buttons are named as the game's prompts show them. They work by position, as SDL lays them out: A is the bottom button (labelled B on Anbernic devices). On Knulli you can swap them per game: long press X on the game in the ports list and change its A/B layout setting.
 
 | Button | Action |
 |--|--|
