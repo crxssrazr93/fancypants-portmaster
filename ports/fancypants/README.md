@@ -17,6 +17,7 @@ Buttons are named as the game's prompts show them. They work by position, as SDL
 
 ## Notes
 
+* On 1 GB devices turn on zram (or swap) in your firmware's settings, so the game does not run out of memory.
 * World 4 (the hub) runs at about 15 fps on an RG35XX H, but at the right game speed.
 * World 3 is the heaviest world. On an RG35XX H it keeps close to full speed by drawing fewer frames when busy, so it can look choppier than Worlds 1 and 2.
 * Entering a world door shows a short black screen while Ruffle restarts to free memory.
