@@ -7,7 +7,7 @@ The port runs the game's own SWF files in [Ruffle](https://ruffle.rs), a Flash P
 | | |
 |--|--|
 | Status | Playable from start to finish on an RG35XX H (Knulli). |
-| Tester reports | Works on an R36H (dArkOS) and an RG40XX-H (muOS). |
+| Tester reports | Works on an R36H (dArkOS) and an RG40XX-H (muOS). `ruffle_sdl` also tested on an RG35XX H with muOS (hub at 13 to 14 fps under muOS's default governor). |
 | Target | aarch64 PortMaster devices (Knulli, muOS, ROCKNIX and others) with 1 GB RAM or more |
 | Runtimes | none (bundled `ruffle_sdl`, Ruffle on the firmware's SDL2 and GLES 3) |
 | Tested game version | current Steam release (MD5 sums in [ports/fancypants/README.md](ports/fancypants/README.md)) |
