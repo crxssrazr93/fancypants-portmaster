@@ -30,7 +30,7 @@ Shrinking the Stage3D back buffer to a quarter of its pixels did not change the 
 * LTO for the Ruffle build: no measurable gain, much longer builds.
 * Capping `BitmapData.drawWithQuality` at the stage quality (no MSAA offscreen): slower (13.7 instead of 15.5 fps). Mali handles MSAA cheaply.
 * Lower Stage3D resolution: no gain (see above).
-* Moving GPU submission to a second thread (`build/experiments/gpu-thread-attempt.diff` and `gpu_worker.rs`). It worked on desktop Mesa (main thread time halved) but not on the Mali blob driver under Westonpack/crusty:
+* Moving GPU submission to a second thread (`build/experiments/gpu-thread-attempt.diff` and `gpu_worker.rs`). It worked on desktop Mesa (main thread time halved) but not on the Mali blob driver (tested under Westonpack and crusty):
   * `glClientWaitSync` returns 0 instead of a status, so any real fence wait fails (wgpu reports `GpuWaitTimeout` on `Surface::configure`). `GlFenceBehavior::AutoFinish` avoids the waits.
   * Creating the window surface renderbuffer on the second thread fails.
   * With submission and presentation on the second thread, buffers created on the main thread at the same time come out invalid (seen in shape vertex buffers), even though wgpu-hal serialises GL access with its context mutex.
@@ -47,11 +47,25 @@ World 3 (AS2) advances one fixed step per frame at 30 fps and has no clock corre
 
 * Ruffle searched for the clip under the mouse on every frame, walking every clip of the level and looking up button handlers on each. That was about 35% of the main thread. `RUFFLE_LAZY_MOUSE_PICK` (patch 0004, set by `tools/run-ruffle` for Worlds 1 to 3) only searches again when the mouse moves or clicks.
 * Ruffle stops catching up once game logic takes more than a third of a frame, so slow frames were simply lost. `RUFFLE_FRAMESKIP` (patch 0004, World 3 only) allows two game frames per screen update when behind. The picture then updates 12 to 19 times per second when busy.
-* Level 4 cached its level art at 1.5x and Ruffle was killed for running out of memory while loading it; it now caches at 1x like the other levels (patch version 8). Memory still peaks at 700 to 790 MB while a World 3 level loads, and Level 1 was killed once at 1x, so memory is tight.
+* Level 4 cached its level art at 1.5x and Ruffle was killed for running out of memory while loading it; it now caches at 1x like the other levels (patch version 8). Under Westonpack, memory still peaked at 700 to 790 MB while a World 3 level loaded, and Level 1 was killed once at 1x (see "Memory with ruffle_sdl" below for the current figures).
 * Caching at 0.5x instead of 1x saved about 75 MB and 3 fps standing still, but made the level art visibly blockier; not used.
 * Remaining cost in Level 4: the game's own scripts, garbage collection and drawing, each 15 to 20%.
 
+## Memory with ruffle_sdl
+
+Patches 0005 to 0011 (pull request #1) replaced Ruffle desktop on Westonpack with `ruffle_sdl` and changed how Ruffle holds a world in memory. Same RG35XX H, same game files, measured the same way (Ruffle RSS and Mali GPU memory, peaks):
+
+| | Before (Westonpack) | ruffle_sdl |
+|--|--|--|
+| World 1 Level 1 | | 30 fps, 204 MB plus 109 MB GPU |
+| World 2 Level 1 | 30 fps, 771 MB plus 503 MB GPU, 117 MB in zram | 30 fps, 222 MB plus 85 MB GPU, no swap used, flat while moving |
+| World 3 Level 4, no swap | 24 game and 12 drawn fps, killed for lack of memory | 30 game and 20 drawn fps, 296 MB plus 135 MB GPU |
+| World 4 hub | about 15 fps | about 16 fps, 250 MB |
+
+Memory now grows as a level is explored. In a longer World 3 session (bedroom menu, then the rooftop level) it held at 666 to 700 MB and peaked at 803 MB plus 450 MB GPU, with about 300 MB in zram, so zram is still recommended on 1 GB devices.
+
+Each change has a switch that restores the old path: `RUFFLE_LAZY_SHAPES=0`, `RUFFLE_LAZY_SHAPE_RECORDS=0`, `RUFFLE_DRAW_IN_PLACE=0`, `RUFFLE_DRAW_POOL_MB=0`, `RUFFLE_ZEROED_PIXELS=0`, `RUFFLE_EMPTY_TEXTURES=0`, `RUFFLE_S3D_DEFER_UPLOAD=0`, `RUFFLE_S3D_MERGE_PASSES=0`. `RUFFLE_MEMLOG=1` logs memory by category.
+
 ## Ideas not tried yet
 
-* Merging consecutive Stage3D draws into one render pass (needs uploads moved out of the pass; expected saving a few ms).
 * Coalescing `SetProgramConstants` uploads per draw.

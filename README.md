@@ -9,9 +9,9 @@ The port runs the game's own SWF files in [Ruffle](https://ruffle.rs), a Flash P
 | Status | Playable from start to finish on an RG35XX H (Knulli). |
 | Tester reports | Works on an R36H (dArkOS) and an RG40XX-H (muOS). |
 | Target | aarch64 PortMaster devices (Knulli, muOS, ROCKNIX and others) with 1 GB RAM or more |
-| Runtimes | Westonpack (`weston_pkg_0.2`), bundled Ruffle build |
+| Runtimes | none (bundled `ruffle_sdl`, Ruffle on the firmware's SDL2 and GLES 3) |
 | Tested game version | current Steam release (MD5 sums in [ports/fancypants/README.md](ports/fancypants/README.md)) |
-| Speed on an RG35XX H | Worlds 1 to 3: a steady 30 fps (their native rate). World 4 hub: about 15 fps (17 with Knulli's High performance mode), at the right game speed |
+| Speed on an RG35XX H | Worlds 1 to 3: a steady 30 fps (their native rate). World 4 hub: about 16 fps, at the right game speed |
 
 ## For players
 
@@ -29,9 +29,8 @@ Fancy Pants Adventures.sh (PortMaster launcher)
   ├ first start, or after a port update: tools/patchscript   (PortMaster patcher screen)
   │   ├ checks MD5 sums, inflates each SWF and applies tools/patch/*.xdelta (originals kept as *.orig)
   │   └ tools/fpa-prep converts World 4's ATF textures to half resolution PNGs
-  └ westonwrap.sh ... crusty_x11egl                            (Weston + Xwayland, GLES)
-      └ tools/run-ruffle ruffle ... ClassicPack-port.swf
-          └ restarts Ruffle straight into the next world whenever the game switches worlds
+  └ tools/run-ruffle ruffle_sdl ... ClassicPack-port.swf      (SDL2 + GLES 3, no X11 or Wayland)
+      └ restarts Ruffle straight into the next world whenever the game switches worlds
 ```
 
 The Classic Pack is an Adobe AIR app: an ActionScript 3 shell (`ClassicPack.swf`) that loads the three ActionScript 2 games and the World 4 hub, which is ActionScript 3 on Starling and Stage3D. The port changes:
@@ -39,7 +38,7 @@ The Classic Pack is an Adobe AIR app: an ActionScript 3 shell (`ClassicPack.swf`
 * **The shell** (`patch/patch_shell.py`): Steamworks, AIR windowing and file APIs and GameInput are removed, settings and progress go to a local SharedObject, quitting uses `fscommand`, and switching worlds asks the launcher to restart Ruffle (one world in memory at a time). It also sets the frame rate and draws a backdrop for screens that are not 3:2.
 * **Worlds 1 to 3** (`patch/patch_world_as2.py`, applied to P-code): the camera can grow taller on 4:3 screens and small rooms stay centered. World 2 advances its clock by the real frame time and caches its levels at 1x instead of 1.5x resolution, so it keeps its speed at 30 fps and fits in 1 GB.
 * **World 4** (`patch/patch_world4.py`): textures load from PNG files instead of ATF, atlases are scaled to match, and Starling's texture uploads go through `BitmapData.draw`.
-* **Ruffle** (`build/ruffle-patches/`): an implementation of `Graphics.readGraphicsData` (World 4 builds its collision with it), Stage3D draw batching with pipeline and bind group caches, GPU side texture uploads, the relaunch command, an optional frame rate log, and for the AS2 worlds mouse picking only when the mouse moves plus frame skipping in World 3.
+* **Ruffle** (`build/ruffle-patches/`): an implementation of `Graphics.readGraphicsData` (World 4 builds its collision with it), Stage3D draw batching with pipeline and bind group caches, GPU side texture uploads, the relaunch command, an optional frame rate log, and for the AS2 worlds mouse picking only when the mouse moves plus frame skipping in World 3. `ruffle_sdl` (patch 0006) is a small front end that runs Ruffle on the firmware's own SDL2 and GLES 3, so no Weston, X11 or Wayland runtime is needed. Patches 0007 to 0009 build each shape the first time it is drawn instead of when its SWF loads, and keep blank bitmaps out of memory, which roughly thirds the memory of a world (details in docs/PERFORMANCE.md).
 * **`fpa-prep`** (`tools/fpa-prep/`): a small Rust tool that decodes Adobe's ATF textures (JPEG XR endpoints plus LZMA compressed DXT indices) to PNG, scales World 4's atlas XML files and inflates SWFs on the device.
 
 The patch scripts work on source that JPEXS decompiles from your own SWF files at build time, so no game code is stored here. Measurements, what helped, and every approach that failed are in [docs/PORTING.md](docs/PORTING.md) and [docs/PERFORMANCE.md](docs/PERFORMANCE.md).
@@ -85,7 +84,7 @@ The API calls, their pitfalls, frame rate logging, profiling and the PC runner a
 
 ## Known limitations
 
-* World 4 (the hub) is CPU bound at about 15 fps on a Cortex A53 at 1.5 GHz. It is timed by the clock, so it plays at the right speed. Moving GPU work to a second thread does not work with the Mali blob driver under Westonpack (see docs/PERFORMANCE.md).
+* World 4 (the hub) is CPU bound at about 15 fps on a Cortex A53 at 1.5 GHz. It is timed by the clock, so it plays at the right speed. Moving GPU work to a second thread does not work with the Mali blob driver (see docs/PERFORMANCE.md).
 * Entering a world door shows a short black screen while Ruffle restarts.
 * Steam achievements and Steam Cloud saves are not available; progress is saved locally.
 * Only the current Steam release is supported (the patcher checks MD5 sums).
@@ -94,7 +93,8 @@ The API calls, their pitfalls, frame rate logging, profiling and the PC runner a
 
 * The Fancy Pants Adventures by Brad Borne / Borne Games. Not affiliated; buy the game to play it.
 * [Ruffle](https://ruffle.rs) (MIT or Apache 2.0). The bundled build is patched as described above.
-* [Westonpack](https://github.com/binarycounter/Westonpack) by binarycounter, the PortMaster team.
+* The PortMaster team. Earlier versions ran on binarycounter's [Westonpack](https://github.com/binarycounter/Westonpack).
+* Knifethrower, for `ruffle_sdl` and the memory patches (pull request #1).
 * Adobe's open source [dds2atf](https://github.com/adobe/dds2atf), which documents the ATF format.
 * [JPEXS Free Flash Decompiler](https://github.com/jindrapetrik/jpexs-decompiler), used at build time.
 * Everything written for this port (launcher, patch scripts, fpa-prep, build scripts, docs) is MIT licensed, see [LICENSE](LICENSE).
