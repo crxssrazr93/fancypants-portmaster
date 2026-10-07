@@ -29,16 +29,16 @@ export PORT_REPORT_FILES="ports/fancypants/log.txt and patchlog.txt"
 source "$GAMEDIR/tools/portlog.sh"
 port_header "Fancy Pants Adventures launcher"
 
-$ESUDO chmod +x "$GAMEDIR/ruffle" "$GAMEDIR/tools/fpa-prep" "$GAMEDIR/tools/patchscript" "$GAMEDIR/tools/run-ruffle"
+$ESUDO chmod +x "$GAMEDIR/ruffle_sdl" "$GAMEDIR/tools/fpa-prep" "$GAMEDIR/tools/patchscript" "$GAMEDIR/tools/run-ruffle"
 
-# User settings: quality, aspect mode, frame rate, GL mode
+# User settings: quality, aspect mode, frame rate
 source "$GAMEDIR/fancypants.cfg"
 
 # Patch the Steam files for Ruffle on first run, and again when a port update ships new patches
 PATCH_VERSION="$(cat "$GAMEDIR/tools/patch/version")"
 port_files "$DATADIR/ClassicPack.swf" "$DATADIR/ClassicPack-port.swf"
 port_log "setup: patch version $PATCH_VERSION, prepared $(cat "$DATADIR/.port_prepared" 2>/dev/null || echo never)"
-port_log "settings (fancypants.cfg): quality $FPA_QUALITY, aspect $FPA_ASPECT, world fps $FPA_WORLD_FPS, GL $FPA_GL_LIBRARY, fps log $FPA_FPS_LOG"
+port_log "settings (fancypants.cfg): quality $FPA_QUALITY, aspect $FPA_ASPECT, world fps $FPA_WORLD_FPS, fps log $FPA_FPS_LOG"
 if [ "$(cat "$DATADIR/.port_prepared" 2>/dev/null)" != "$PATCH_VERSION" ]; then
   if [ -f "$controlfolder/utils/patcher.txt" ]; then
     export PATCHER_FILE="$GAMEDIR/tools/patchscript"
@@ -64,61 +64,27 @@ if [ "$(cat "$DATADIR/.port_prepared" 2>/dev/null)" != "$PATCH_VERSION" ]; then
   fi
 fi
 
-# Mount Weston runtime
-weston_dir=/tmp/weston
-$ESUDO mkdir -p "${weston_dir}"
-weston_runtime="weston_pkg_0.2"
-if [ ! -f "$controlfolder/libs/${weston_runtime}.squashfs" ]; then
-  if [ ! -f "$controlfolder/harbourmaster" ]; then
-    pm_message "This port requires the latest PortMaster to run, please go to https://portmaster.games/ for more info."
-    sleep 5
-    exit 1
-  fi
-  $ESUDO $controlfolder/harbourmaster --quiet --no-check runtime_check "${weston_runtime}.squashfs"
-fi
-if [[ "$PM_CAN_MOUNT" != "N" ]]; then
-  $ESUDO umount "${weston_dir}"
-fi
-$ESUDO mount "$controlfolder/libs/${weston_runtime}.squashfs" "${weston_dir}"
-port_mounted "$weston_runtime" "$weston_dir/westonwrap.sh"
-
-mkdir -p "$GAMEDIR/saves" "$GAMEDIR/config" "$GAMEDIR/cache"
+mkdir -p "$GAMEDIR/saves"
 
 # gptokeyb is unresponsive on muOS (see the Dicey Dungeons port)
 if [ "$CFW_NAME" = "muOS" ] && [ -n "$GPTOKEYB2" ]; then
-  $GPTOKEYB2 "ruffle" -c "$GAMEDIR/fancypants.gptk" &
+  $GPTOKEYB2 "ruffle_sdl" -c "$GAMEDIR/fancypants.gptk" &
 else
-  $GPTOKEYB "ruffle" -c "$GAMEDIR/fancypants.gptk" &
+  $GPTOKEYB "ruffle_sdl" -c "$GAMEDIR/fancypants.gptk" &
 fi
-pm_platform_helper "$GAMEDIR/ruffle"
+pm_platform_helper "$GAMEDIR/ruffle_sdl"
 
-# westonwrap replaces XDG_RUNTIME_DIR; pass the real one on so ALSA can reach PipeWire
-REAL_XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 # FPA_FPS_LOG=1 in fancypants.cfg writes the frame rate to log.txt
-[ "$FPA_FPS_LOG" = "1" ] && FPS_ENV="RUFFLE_FPS_LOG=1"
+[ "$FPA_FPS_LOG" = "1" ] && FPS_ENV="RUFFLE_FPS_LOG=1 RUFFLE_SDL_TIMING=1"
 
-port_log "starting the game, quality $FPA_QUALITY, aspect $FPA_ASPECT, world fps $FPA_WORLD_FPS, GL $FPA_GL_LIBRARY"
-# CRUSTY_BLOCK_INPUT: gptokeyb provides the keyboard, so don't also forward the pad
-# WRAPPED_PRELOAD_PANFROST: on ROCKNIX/panfrost westonwrap runs the app natively; preload crusty for input blocking
-# WGPU_DISCARD_HAL_LABELS: avoids a libmali crash in glPushDebugGroup (gfx-rs/wgpu#8937)
+port_log "starting the game, quality $FPA_QUALITY, aspect $FPA_ASPECT, world fps $FPA_WORLD_FPS"
+# ruffle_sdl: Ruffle on the firmware's own SDL2 and GLES 3 (no Weston or X11 needed)
 # run-ruffle restarts Ruffle when the game switches worlds, so only one world is in memory
-$ESUDO env CRUSTY_BLOCK_INPUT=1 \
-  WRAPPED_PRELOAD_PANFROST="$weston_dir/lib_aarch64/graphics/sdl_cursor/libcrusty.so" \
-  $weston_dir/westonwrap.sh headless noop kiosk "$FPA_GL_LIBRARY" \
-  WAYLAND_DISPLAY= HOME="$GAMEDIR/config" XDG_CONFIG_HOME="$GAMEDIR/config" XDG_DATA_HOME="$GAMEDIR/config" \
-  XDG_CACHE_HOME="$GAMEDIR/cache" XDG_RUNTIME_DIR="$REAL_XDG_RUNTIME_DIR" \
-  RUST_LOG=warn,ruffle_core::player::port_fps=info $FPS_ENV WGPU_DISCARD_HAL_LABELS=1 \
-  "$GAMEDIR/tools/run-ruffle" "$GAMEDIR/ruffle" --no-gui --fullscreen -g gl -p low --gamemode off \
-    --player-runtime air --filesystem-access-mode allow --open-url-mode deny --tcp-connections deny \
-    --quality "$FPA_QUALITY" --letterbox off -Paspect="$FPA_ASPECT" -Pworldfps="$FPA_WORLD_FPS" \
-    --width "$DISPLAY_WIDTH" --height "$DISPLAY_HEIGHT" \
-    --save-directory "$GAMEDIR/saves" --config "$GAMEDIR/config" --cache-directory "$GAMEDIR/cache" \
+env RUST_LOG=warn,ruffle_core::player::port_fps=info,ruffle_sdl=info $FPS_ENV \
+  "$GAMEDIR/tools/run-ruffle" "$GAMEDIR/ruffle_sdl" --stage-scale movie --quality "$FPA_QUALITY" \
+    -Paspect="$FPA_ASPECT" -Pworldfps="$FPA_WORLD_FPS" --save-directory "$GAMEDIR/saves" \
     "$DATADIR/ClassicPack-port.swf"
 
 # Clean up after ourselves
 port_exit
-$ESUDO $weston_dir/westonwrap.sh cleanup
-if [[ "$PM_CAN_MOUNT" != "N" ]]; then
-  $ESUDO umount "${weston_dir}"
-fi
 pm_finish

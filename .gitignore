@@ -1,7 +1,7 @@
 # Local workspace: JPEXS, Ruffle source and build output, test copies of the game
 work
 # Built by build/build_ruffle.sh and build/build_prep.sh
-ports/fancypants/fancypants/ruffle
+ports/fancypants/fancypants/ruffle_sdl
 ports/fancypants/fancypants/tools/fpa-prep
 tools/fpa-prep/target/
 # Game files and files the port creates at runtime are never part of the repo
