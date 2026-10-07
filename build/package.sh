@@ -2,12 +2,12 @@
 # package.sh: fancypants.zip, ready to unzip into ports/, laid out the way PortMaster's
 # tools/build_release.py builds it from ports/fancypants/ (metadata moved into the port
 # folder, README.md renamed to fancypants.md).
-# Expects the aarch64 builds in place: ports/fancypants/fancypants/ruffle (build_ruffle.sh)
+# Expects the aarch64 builds in place: ports/fancypants/fancypants/ruffle_sdl (build_ruffle.sh)
 # and ports/fancypants/fancypants/tools/fpa-prep (build_prep.sh).
 set -e
 here=$(cd "$(dirname "$0")" && pwd); root=$(cd "$here/.." && pwd)
 src="$root/ports/fancypants"
-for f in ruffle tools/fpa-prep; do
+for f in ruffle_sdl tools/fpa-prep; do
   [ -x "$src/fancypants/$f" ] || { echo "missing ports/fancypants/fancypants/$f, build it first"; exit 1; }
 done
 stage=$(mktemp -d)

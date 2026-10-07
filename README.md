@@ -61,12 +61,14 @@ Requirements: Docker, Java (for [JPEXS ffdec](https://github.com/jindrapetrik/jp
 
 ```
 build/fetch_ruffle.sh work/ruffle-src                     # Ruffle 0.7.0 nightly 2026.10.4 with the port's patches
-build/build_ruffle.sh work/ruffle-src work/ruffle-arm      # aarch64 Ruffle (Ubuntu 20.04 image, glibc 2.30 symbols)
-cp work/ruffle-arm/ruffle ports/fancypants/fancypants/
+build/build_ruffle.sh work/ruffle-src work/ruffle-arm      # aarch64 ruffle_sdl (Ubuntu 20.04 image, glibc 2.30 symbols)
+cp work/ruffle-arm/ruffle_sdl ports/fancypants/fancypants/
 build/build_prep.sh ports/fancypants/fancypants/tools       # aarch64 fpa-prep
 FFDEC=/path/to/ffdec.jar build/make_patches.sh /path/to/Classic\ Pack   # the xdelta3 patches
 build/package.sh                                           # fancypants.zip, laid out like PortMaster's release build
 ```
+
+Without Docker, `build/build_ruffle_native.sh` and `build/build_prep_native.sh` build the same two binaries with host clang and lld against a Debian bullseye arm64 sysroot (see their headers).
 
 `make_patches.sh` rebuilds the shipped patches byte for byte from the Steam files. When a patch changes, raise the number in `ports/fancypants/fancypants/tools/patch/version` so prepared installs patch again on their next start.
 
