@@ -3,8 +3,6 @@
 # Runs Ruffle. When the game switches to another world it prints "FPA_RELAUNCH <game> <level> <door>"
 # and exits; Ruffle is then started again straight into that world, so every world gets all of
 # the handheld's memory instead of piling up next to the previous one.
-# Only bash builtins read Ruffle's output: Westonpack preloads a library into every process that
-# prints its own banner, so external filters (sed, tail) would add lines of their own.
 # Worlds 1 to 3 (AS2) run with RUFFLE_LAZY_MOUSE_PICK: Ruffle only looks for the clip under the
 # mouse when the mouse moves, instead of searching every clip of the level on every frame.
 # World 3 advances one fixed step per frame, so it also runs with RUFFLE_FRAMESKIP: when a frame
