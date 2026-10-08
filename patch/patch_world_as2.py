@@ -133,6 +133,17 @@ W2_BITRES_NEW = 'Push "bitRes", 1\nDefineLocal\n'
 W3_BITRES_OLD = 'Push "bitRes", 1.5\nSetVariable\n'
 W3_BITRES_NEW = 'Push "bitRes", 1\nSetVariable\n'
 
+# World 2 kills the player (and a kicked snail shell) once it falls 700 px below the top of the
+# view at its lowest scroll: _y > -_root.MinY + 700, where -MinY = level bottom - view height.
+# 700 was tuned for the 480 tall view (a 220 px margin below the level), so a taller extend view
+# moves the line up: at 720x720 it sits above the level bottom and falling into deep pits kills.
+# Use view height + 220, the same margin at every aspect.
+W2_FALL_OLD = 'Push 0.0, register2, "MinY"\nGetMember\nSubtract\nPush 700\nAdd2\nGreater\n'
+W2_FALL_NEW = ('Push 0.0, register2, "MinY"\nGetMember\nSubtract\nPush register2, "scaledStageHeight"\n'
+               'GetMember\nAdd2\nPush 220\nAdd2\nGreater\n')
+W2_FALL_SCRIPTS = {"__Packages/CharClass.pcode": "/__Packages/CharClass",
+                   "DefineSprite_1399_SnailShell_w2/frame_4/DoAction.pcode": "/DefineSprite_1399_SnailShell_w2/frame_4/DoAction"}
+
 done = {"scrollrect": 0}
 for frame in sorted(os.listdir(os.path.join(exp, "scripts"))):
     p = os.path.join(exp, "scripts", frame, "DoAction.pcode")
@@ -164,6 +175,16 @@ for frame in sorted(os.listdir(os.path.join(exp, "scripts"))):
         dst = os.path.join(out, frame + ".pcode")
         open(dst, "w", encoding="utf-8").write(src)
         print(f"/{frame}/DoAction\t{dst}")
+if os.path.exists(os.path.join(exp, "scripts", "DefineSprite_1399_SnailShell_w2")):
+    for rel, name in W2_FALL_SCRIPTS.items():
+        p = os.path.join(exp, "scripts", rel)
+        src = open(p, encoding="utf-8").read()
+        if src.count(W2_FALL_OLD) != 1:
+            sys.exit(f"fall line anchor not found in {rel}")
+        dst = os.path.join(out, rel.replace("/", "_"))
+        open(dst, "w", encoding="utf-8").write(src.replace(W2_FALL_OLD, W2_FALL_NEW))
+        print(f"{name}\t{dst}")
+    done["fall"] = 1
 if done["scrollrect"] != 1:
     sys.exit(f"ScrollRect anchor matched {done['scrollrect']}x")
 print(f"patched OK {done}", file=sys.stderr)

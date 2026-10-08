@@ -16,6 +16,7 @@ The Steam release is an Adobe AIR app with SWF content, and there is no AIR runt
 * Quit through `fscommand("quit")`.
 * Boot parameters (`-P` flashvars from the launcher) choose the world, level and door to start in, the aspect mode and the frame rate.
 * Screen aspect: Worlds 1 to 3 are 3:2. `extend` (the default) passes the real screen size to the games, `fit` keeps 3:2 with black bars, `fill` crops the sides.
+* World 2 kills the player once it falls 700 px below the top of the view at its lowest scroll. That number assumed a 480 px tall view (a 220 px margin under the level), so with `extend` on a square 720x720 screen the line sat above the bottom of the level and jumping into deep pits (the hole after the rabbit in Level 1) killed. `patch/patch_world_as2.py` replaces 700 with the view height plus 220 for the player and the kicked snail shell, the same margin at every aspect. Worlds 1 and 3 take their fall line from level data and were not affected.
 * The stage behind the games is white, like the original. A black backdrop made the black stick figure invisible wherever a level has no background.
 
 ## 3. Memory: one world at a time
