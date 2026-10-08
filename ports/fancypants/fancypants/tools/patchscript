@@ -69,9 +69,11 @@ fi
 patch_swf ClassicPack.swf 499ece31db0c8158f1749b51a87f318c ClassicPack.xdelta ClassicPack-port.swf
 while read -r n sum; do
   f="World$n/FPAWorld$n.swf"
-  if [ ! -f "$f.orig" ]; then
+  # Steam's files are compressed SWFs ("CWS"), the patched ones are not ("FWS"): a compressed
+  # file here is a fresh copy of the game, which replaces the kept original
+  if [ ! -f "$f.orig" ] || [ "$(head -c 3 "$f" 2>/dev/null)" = "CWS" ]; then
     check_md5 "$f" "$sum"
-    mv "$f" "$f.orig"
+    mv -f "$f" "$f.orig"
   fi
   patch_swf "$f.orig" "$sum" "FPAWorld$n.xdelta" "$f"
 done <<EOF
@@ -83,16 +85,26 @@ EOF
 
 # World 3 loads "OtherStuff/..." relative to the root movie in Ruffle (AIR resolved it next to
 # FPAWorld3.swf), so move that folder to where Ruffle looks
-if [ -d World3/OtherStuff ] && [ ! -d OtherStuff ]; then
+# (a fresh copy of the game brings it back, and replaces the one moved before)
+if [ -d World3/OtherStuff ]; then
   echo "Moving World3/OtherStuff..."
-  mv World3/OtherStuff OtherStuff || fail "could not move World3/OtherStuff"
+  rm -rf OtherStuff && mv World3/OtherStuff OtherStuff || fail "could not move World3/OtherStuff"
 fi
 
 # Level atlas XMLs are in pixels of the original textures; scale them to the converted ones
 # (always from the untouched .orig copy)
+# (always from the untouched .orig copy; a file that is neither the kept original nor its scaled
+# version is a fresh copy of the game and becomes the original)
 for xml in World4/assets/*/*.xml; do
   [ -f "$xml" ] || continue
-  [ -f "$xml.orig" ] || cp "$xml" "$xml.orig" || fail "could not back up $xml"
+  if [ -f "$xml.orig" ] && ! cmp -s "$xml" "$xml.orig"; then
+    "$PREP" atlasxml "$SCALE" "$xml.orig" "$xml.tmp" || fail "could not scale $xml"
+    cmp -s "$xml" "$xml.tmp" || rm -f "$xml.orig"
+    rm -f "$xml.tmp"
+  fi
+  if [ ! -f "$xml.orig" ]; then
+    cp "$xml" "$xml.tmp" && mv -f "$xml.tmp" "$xml.orig" || fail "could not back up $xml"
+  fi
   "$PREP" atlasxml "$SCALE" "$xml.orig" "$xml" || fail "could not scale $xml"
 done
 
@@ -115,7 +127,7 @@ fi
 # Windows/AIR/Steam runtime files are not used by the port
 rm -rf "Adobe AIR" META-INF ./*.exe ./*.dll mimetype 2>/dev/null
 
-cp "$PATCHDIR/version" .port_prepared
+{ cat "$PATCHDIR/version"; fpa_stamp; } > .port_prepared
 echo "=== Done. Enjoy! ==="
 port_log "setup finished in ${SECONDS}s"
 port_mem end

@@ -45,6 +45,7 @@ Patches are xdelta3 files against the inflated (uncompressed) SWFs: a delta agai
 
 * PortMaster's `xdelta3` has no LZMA secondary compressor, so deltas are made with `-S none` (the default build fails on the device with "unavailable secondary compressor: LZMA").
 * The patcher keeps the originals as `*.orig` and stamps the prepared install with `tools/patch/version`. When a port update ships new patches with a higher number, the next start patches again from the originals.
+* The stamp (`gamedata/.port_prepared`) also holds the size and date of every file the setup writes, so copying the game again (or a game update) runs the setup on the next start; before, only the patch number counted and a fresh copy ran unpatched. A compressed world SWF (`CWS`, as Steam ships them; patched ones are stored uncompressed) is a fresh copy and replaces the kept `.orig`, a World 4 atlas XML that is neither the kept original nor its scaled version becomes the new original, and a fresh `World3/OtherStuff` replaces the moved one. Tested on the PC (the whole game copied again gives byte identical files) and on the RG35XX H (an install with the old stamp patched again once in 6 s, then started without the setup).
 * World 3 loads `OtherStuff/...` relative to the root movie in Ruffle (AIR resolved it next to `FPAWorld3.swf`), so the patcher moves that folder to the game root.
 
 ## 7. Frame rate and game speed

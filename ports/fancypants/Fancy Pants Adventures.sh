@@ -38,9 +38,12 @@ source "$GAMEDIR/fancypants.cfg"
 # Patch the Steam files for Ruffle on first run, and again when a port update ships new patches
 PATCH_VERSION="$(cat "$GAMEDIR/tools/patch/version")"
 port_files "$DATADIR/ClassicPack.swf" "$DATADIR/ClassicPack-port.swf"
-port_log "setup: patch version $PATCH_VERSION, prepared $(cat "$DATADIR/.port_prepared" 2>/dev/null || echo never)"
+port_log "setup: patch version $PATCH_VERSION, prepared $(head -n 1 "$DATADIR/.port_prepared" 2>/dev/null || echo never)"
+# prepared: this patch version, and the files the setup wrote unchanged since (a fresh copy of the
+# game, or an update, changes them)
+prepared() { [ "$(cat "$DATADIR/.port_prepared" 2>/dev/null)" = "$(echo "$PATCH_VERSION"; cd "$DATADIR" && fpa_stamp)" ]; }
 port_log "settings (fancypants.cfg): quality $FPA_QUALITY, aspect $FPA_ASPECT, world fps $FPA_WORLD_FPS, fps log $FPA_FPS_LOG"
-if [ "$(cat "$DATADIR/.port_prepared" 2>/dev/null)" != "$PATCH_VERSION" ]; then
+if ! prepared; then
   if [ -f "$controlfolder/utils/patcher.txt" ]; then
     export PATCHER_FILE="$GAMEDIR/tools/patchscript"
     export PATCHER_GAME="$(basename "${0%.*}")"
@@ -55,7 +58,7 @@ if [ "$(cat "$DATADIR/.port_prepared" 2>/dev/null)" != "$PATCH_VERSION" ]; then
     exit 1
   fi
   # the patcher screen has shown the error already; patchlog.txt keeps it
-  if [ "$(cat "$DATADIR/.port_prepared" 2>/dev/null)" != "$PATCH_VERSION" ]; then
+  if ! prepared; then
     port_log "setup failed"
     port_report
     pm_message "Preparing the game failed, see ports/fancypants/patchlog.txt. To report it, send $PORT_REPORT_FILES."

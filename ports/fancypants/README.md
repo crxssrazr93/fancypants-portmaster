@@ -1,6 +1,6 @@
 ## Installation
 
-Buy the game on [Steam](https://store.steampowered.com/app/1668460/) and copy everything from its install folder into `ports/fancypants/gamedata/` (you should see `ClassicPack.swf` and the folders `World1` to `World4`). The first launch patches the files and converts the World 4 textures, which takes a few minutes. Only the current Steam release is supported.
+Buy the game on [Steam](https://store.steampowered.com/app/1668460/) and copy everything from its install folder into `ports/fancypants/gamedata/` (you should see `ClassicPack.swf` and the folders `World1` to `World4`). The first launch patches the files and converts the World 4 textures, which takes a few minutes. Only the current Steam release is supported. If files are missing or damaged, copy the game files again: the next launch patches them.
 
 ## Controls
 

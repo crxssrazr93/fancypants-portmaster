@@ -69,6 +69,19 @@ port_mounted() {
 # ended with an error does the log also name the files to send. westonwrap logs the exit code:
 # 0 is a normal quit; 143 (SIGTERM) and 137 (SIGKILL) are how firmwares close a game from the
 # hotkey. A kill for lack of memory is also 137, but then the kernel logs it (caught above).
+# The files the setup writes, with size and modification time (muOS has no stat). The setup saves
+# this after the patch version in gamedata/.port_prepared; a fresh copy of the game changes it, so
+# the launcher runs the setup again. Run from gamedata/.
+fpa_stamp() {
+  local f
+  for f in ClassicPack.swf ClassicPack-port.swf World1/FPAWorld1.swf World2/FPAWorld2.swf \
+      World3/FPAWorld3.swf World4/FPAWorld4.swf World4/assets/*/*.xml; do
+    [ -e "$f" ] || continue
+    if command -v stat >/dev/null; then stat -c '%n %s %Y' "$f"
+    else echo "$f $(ls -lnL "$f" | awk '{print $5}') $(date -r "$f" +%s)"; fi
+  done
+}
+
 port_exit() {
   local code oom
   port_log "game ended after ${SECONDS}s since launch"
