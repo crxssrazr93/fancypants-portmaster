@@ -33,4 +33,5 @@ docker run --rm --platform linux/amd64 -v "$tmp/fws":/w:ro -v "$out":/out alpine
     xdelta3 -d -f -s /w/orig/$f.swf /out/$f.xdelta /tmp/t && cmp /tmp/t /w/new/$f.swf || exit 1
   done
   chown '"$(id -u):$(id -g)"' /out/*.xdelta'
+"$here/world4_manifest.sh" "$game"
 echo "patches written to $out"

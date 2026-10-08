@@ -75,7 +75,8 @@ port_mounted() {
 fpa_stamp() {
   local f
   for f in ClassicPack.swf ClassicPack-port.swf World1/FPAWorld1.swf World2/FPAWorld2.swf \
-      World3/FPAWorld3.swf World4/FPAWorld4.swf World4/assets/*/*.xml; do
+      World3/FPAWorld3.swf World4/FPAWorld4.swf World4/assets/*/*.xml World4/assets/*/*.png \
+      World4/Levels/*.swf; do
     [ -e "$f" ] || continue
     if command -v stat >/dev/null; then stat -c '%n %s %Y' "$f"
     else echo "$f $(ls -lnL "$f" | awk '{print $5}') $(date -r "$f" +%s)"; fi
