@@ -11,8 +11,7 @@ Buttons are named as the game's prompts show them. They work by position, as SDL
 | D-pad / Left stick | Move, Up enters doors, Down ducks |
 | A / B / X / Y | Jump / Attack / Special / Special 2 |
 | Start | Pause |
-| L1 / L2 | Cycle quality / Mute music |
-| Right stick, R1 / R2 | Mouse, click |
+| L1 / L2 | Music / sound effects volume: 100%, 50%, off (saved) |
 | Select + Start | Quit |
 
 ## Notes
@@ -23,6 +22,8 @@ Buttons are named as the game's prompts show them. They work by position, as SDL
 * Entering a world door shows a short black screen while Ruffle restarts to free memory.
 * Steam achievements and cloud saves are not available, progress is saved locally.
 * Settings (quality, screen fit, frame rate) are in `ports/fancypants/fancypants.cfg`.
+* The hub has no pause; Start pauses inside Worlds 1 to 3.
+* On 4:3 and square screens the worlds show more of the level above, and the floor stays at the bottom of the screen.
 
 ## Reporting problems
 

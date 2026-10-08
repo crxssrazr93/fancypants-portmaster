@@ -386,6 +386,108 @@ sub(
          return "";""",
 )
 
+# L1 / L2 (gptokeyb sends m / n): step the music / sound volume 100% > 50% > 0% > 100%, saved like
+# the overlay menu's sliders (which need a mouse), with a short note at the top of the screen.
+sub("   import flash.text.TextField;\n", "   import flash.text.TextField;\n   import flash.text.TextFormat;\n")
+sub("""         if(this.frameCount < this.keyTimer[event.keyCode])
+         {
+            trace("ignore");
+            return;
+         }
+         this.keyboardDirty = true;""",
+    """         if(event.keyCode == 77 || event.keyCode == 78)
+         {
+            this.portStepVolume(event.keyCode == 77 ? "musicVolume" : "soundVolume");
+            return;
+         }
+         if(this.frameCount < this.keyTimer[event.keyCode])
+         {
+            trace("ignore");
+            return;
+         }
+         this.keyboardDirty = true;""")
+sub("""      private function changeVolume(knob:SimpleButton) : void
+""",
+    """      private var portNote:TextField;
+
+      private var portNoteTime:int;
+
+      private function portStepVolume(setting:String) : void
+      {
+         this.LoadGameData();
+         var v:Number = Number(this.SaveData[setting]);
+         if(v > 0.75)
+         {
+            v = 0.5;
+         }
+         else if(v > 0.25)
+         {
+            v = 0;
+         }
+         else
+         {
+            v = 1;
+         }
+         this.SaveData[setting] = v;
+         this.SaveGameData();
+         if(setting == "musicVolume")
+         {
+            this.musicVolume = v;
+         }
+         else
+         {
+            this.soundVolume = v;
+         }
+         if(this.myAS3Menu != null)
+         {
+            this.myAS3Menu.musicSlider.knob.y = this.SaveData.musicVolume * -100;
+            this.myAS3Menu.soundSlider.knob.y = this.SaveData.soundVolume * -100;
+         }
+         // never exactly 0: the hub pauses its music at 0 without noting the volume, and then
+         // does not start it again when the volume goes back up
+         this.lcSend.send("GameHotline" + this.GameIt,"sendSettings",setting,Math.max(cosCurve(v),0.001));
+         this.portShowNote((setting == "musicVolume" ? "Music " : "Sounds ") + Math.round(v * 100) + "%");
+      }
+
+      private function portShowNote(text:String) : void
+      {
+         if(this.portNote == null)
+         {
+            this.portNote = new TextField();
+            this.portNote.selectable = false;
+            this.portNote.background = true;
+            this.portNote.backgroundColor = 0;
+            this.portNote.autoSize = "left";
+            this.portNote.addEventListener(Event.ENTER_FRAME,this.portNoteFade);
+         }
+         this.portNote.defaultTextFormat = new TextFormat("_sans",Math.max(12,Math.round(stage.stageHeight / 22)),16777215,true);
+         this.portNote.text = " " + text + " ";
+         this.portNote.x = Math.round((stage.stageWidth - this.portNote.width) / 2);
+         this.portNote.y = Math.round(stage.stageHeight / 30);
+         this.portNote.alpha = 1;
+         this.portNoteTime = 45;
+         stage.addChild(this.portNote);
+      }
+
+      private function portNoteFade(e:Event) : void
+      {
+         if(this.portNoteTime > 0)
+         {
+            --this.portNoteTime;
+         }
+         else if(this.portNote.alpha > 0)
+         {
+            this.portNote.alpha -= 0.1;
+         }
+         else if(this.portNote.parent != null)
+         {
+            this.portNote.parent.removeChild(this.portNote);
+         }
+      }
+
+      private function changeVolume(knob:SimpleButton) : void
+""")
+
 leftover = [w for w in ("Steamworks", "nativeWindow", "NativeApplication", "GameInput", "File.") if w in src]
 if leftover:
     sys.exit(f"leftover AIR/Steam references: {leftover}")
