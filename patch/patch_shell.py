@@ -194,7 +194,9 @@ sub(
 # Native aspect ratio for the AS2 worlds ("compatibility" mode). The original renders at the
 # screen's aspect via stage.fullScreenSourceRect, which Ruffle doesn't implement, so it fell back
 # to SHOW_ALL letterboxing. Instead: no stage scaling, scale the game to the screen height and
-# center it horizontally (4:3 trims the sides of the 3:2 view, 16:9 shows more of the level).
+# center it horizontally for fit and fill. In extend mode the world itself widens its view to the
+# screen (setDimensions), so it starts at the left edge: centering it there pushed a 16:9 view
+# half a margin to the right (white strip on the left, the right edge cut off).
 sub(
     """         if(this.compatibility)
          {
@@ -227,7 +229,14 @@ sub(
                this.Scale = Math.min(stage.stageWidth / this.originalStageWidth,stage.stageHeight / this.originalStageHeight);
             }
             scaleX = scaleY = this.Scale;
-            x = Math.round((stage.stageWidth - this.originalStageWidth * this.Scale) / 2);
+            if(loaderInfo.parameters.aspect == "extend")
+            {
+               x = 0;
+            }
+            else
+            {
+               x = Math.round((stage.stageWidth - this.originalStageWidth * this.Scale) / 2);
+            }
             if(loaderInfo.parameters.aspect == "fit")
             {
                y = Math.round((stage.stageHeight - this.originalStageHeight * this.Scale) / 2);
@@ -256,6 +265,20 @@ sub(
             }
             this.portBackdrop.graphics.endFill();
             this.portBackdrop.visible = true;
+            if(this.portBars == null)
+            {
+               this.portBars = new Shape();
+               stage.addChild(this.portBars);
+            }
+            this.portBars.graphics.clear();
+            if(loaderInfo.parameters.aspect == "fit")
+            {
+               this.portBars.graphics.beginFill(0);
+               this.portBars.graphics.drawRect(0,0,stage.stageWidth,stage.stageHeight);
+               this.portBars.graphics.drawRect(x,y,this.originalStageWidth * this.Scale,this.originalStageHeight * this.Scale);
+               this.portBars.graphics.endFill();
+            }
+            this.portBars.visible = true;
          }
          else
          {
@@ -265,6 +288,10 @@ sub(
             if(this.portBackdrop != null)
             {
                this.portBackdrop.visible = false;
+            }
+            if(this.portBars != null)
+            {
+               this.portBars.visible = false;
             }
          }""",
 )
@@ -285,8 +312,9 @@ sub("""            this.screenRatio = newRatio = Capabilities.screenResolutionX 
                }
 """)
 # backdrop behind the scaled game: white like the original stage colour (levels rely on it),
-# with black bars outside the game area in fit mode
-sub("      private var screenRatio:Number;\n", "      private var screenRatio:Number;\n\n      private var portBackdrop:Shape;\n")
+# with black bars outside the game area in fit mode. The worlds draw level art past their own
+# view, so in fit mode a frame on top of everything (a stage child above the shell) covers the bars.
+sub("      private var screenRatio:Number;\n", "      private var screenRatio:Number;\n\n      private var portBackdrop:Shape;\n\n      private var portBars:Shape;\n")
 sub("               if(this.rawStageHeight > Capabilities.screenResolutionY)\n               {\n                  this.rawStageHeight = Capabilities.screenResolutionY;",
     "               if(this.rawStageHeight > stage.stageHeight)\n               {\n                  this.rawStageHeight = stage.stageHeight;")
 
