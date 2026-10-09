@@ -46,7 +46,7 @@ tests/device.sh stop
 
 ## Measuring speed
 
-Set `FPA_FPS_LOG="1"` in `ports/fancypants/fancypants.cfg`. Ruffle then writes a `port_fps` line to `log.txt` every two seconds (frame rate and where the frame time went). `tests/device.sh waitfps <n>` waits for `n` such lines and prints the last three. Set it back to `0` afterwards.
+Add `export RUFFLE_FPS_LOG=1 RUST_LOG=warn,ruffle_core::player::port_fps=info` to `ports/fancypants/fancypants.cfg` (the launcher sources it). Ruffle then writes a `port_fps` line to `log.txt` every two seconds (frame rate and where the frame time went). `tests/device.sh waitfps <n>` waits for `n` such lines and prints the last three. Remove the line afterwards.
 
 Sampling the Ruffle main thread with `gdb -p $(pidof ruffle_sdl) -batch -ex 'thread 1' -ex bt` in a loop and symbolising the addresses against the unstripped aarch64 build (`work/ruffle-src/target/aarch64-unknown-linux-gnu/release/ruffle_sdl`, offset by the mapping base from `/proc/<pid>/maps`) gives a CPU profile; that is how the numbers in [PERFORMANCE.md](PERFORMANCE.md) were found. For ActionScript time, run with `RUFFLE_AS3_PROF=1` and `RUST_LOG=ruffle_core::avm2::function::as3prof=info` (patch 0003).
 

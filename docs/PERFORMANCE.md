@@ -1,6 +1,6 @@
 # Performance notes (RG35XX H, H700, Mali G31, Knulli)
 
-Measured with `FPA_FPS_LOG="1"` (frame rate and timings in `log.txt`) and, for AS3, `RUFFLE_AS3_PROF=1` with `RUST_LOG=ruffle_core::avm2::function::as3prof=info`.
+Measured with `RUFFLE_FPS_LOG=1` (frame rate and timings in `log.txt`, see [TESTING.md](TESTING.md)) and, for AS3, `RUFFLE_AS3_PROF=1` with `RUST_LOG=ruffle_core::avm2::function::as3prof=info`.
 
 ## Where the time goes
 
