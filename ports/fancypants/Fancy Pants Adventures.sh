@@ -70,7 +70,7 @@ fi
 
 mkdir -p "$GAMEDIR/saves"
 
-# gptokeyb is unresponsive on muOS (see the Dicey Dungeons port)
+# gptokeyb is unresponsive on muOS, so gptokeyb2 is used there
 if [ "$CFW_NAME" = "muOS" ] && [ -n "$GPTOKEYB2" ]; then
   $GPTOKEYB2 "ruffle_sdl" -c "$GAMEDIR/fancypants.gptk" &
 else
